@@ -24,3 +24,88 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@layer base {
+  /* 1. สำหรับ Firefox */
+  html {
+    scrollbar-width: thin;
+    /* (สีฟ้า-400 และ สีเทา-100) */
+    scrollbar-color: #60a5fa #f1f5f9;
+  }
+
+  /* 2. สำหรับ Chrome, Safari, Edge (WebKit) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #f1f5f9; /* สีเทา-100 */
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #60a5fa; /* สีฟ้า-400 */
+    border-radius: 10px;
+    border: 2px solid #f1f5f9;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #3b82f6; /* สีฟ้า-600 (สีหลัก) */
+  }
+}
+
+/* --- Rain Animation --- */
+
+.rain-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+
+  /* z-index: 5 (ถูกต้อง: อยู่หลังตึก z-10, อยู่หน้าพื้นหลัง z-0) */
+  z-index: 5;
+
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAABkCAMAAAB6L8ovAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAGUExURQAAAN/f3/+bU/gAAAACdFJOUwBgGOr/xAAAAAlwSFlzAAABfAAAAXwBgmSfLAAAAExJREFUOE9jYEAEYqAMYMQDBsYWBgY+xgZGBn6AQQZkZGRkZGRkZITAikACYwYGBkZGBgaG/xNMDP8ZmdkYGFgYGEAAKI0gqGNgYPjPwMACzAwM/xmB/P//AAA9+QOQ3mQMGwAAAABJRU5ErkJggg==");
+
+  /* เพิ่ม: 'background-repeat' เพื่อให้แน่ใจว่ามันต่อกัน */
+  background-repeat: repeat;
+
+  animation: rain-fall 1s linear infinite;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Keyframes (อันนี้เหมือนเดิม) */
+@keyframes rain-fall {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 0% 100%;
+  }
+}
+
+.sway-left {
+  animation: sway-left 30s ease-in-out infinite alternate;
+}
+
+@keyframes sway-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-30px);
+  }
+}
+
+.sway-right {
+  animation: sway-right 25s ease-in-out infinite alternate;
+}
+
+@keyframes sway-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(30px); /* ขยับไปขวา 30px */
+  }
+}

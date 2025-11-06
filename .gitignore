@@ -9,6 +9,7 @@ __pycache__/
 *notebooks.bck/
 *data/PROCESSED/save
 *data copy
+*Graphic/
 
 # Distribution / packaging
 .Python
