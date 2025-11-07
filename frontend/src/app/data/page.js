@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { csv } from "d3-fetch"; // (สำคัญ!) Import d3-fetch
+import { csv } from "d3-fetch";
 import {
   Database,
   FileText,
@@ -21,15 +21,27 @@ import {
   Grid,
 } from "lucide-react";
 import {
-  // (สำคัญ!) Import กราฟจาก components
+  // --- (แก้ไข) Import กราฟ 4 ตัวใหม่ + ข้อมูล Heatmap ---
   CorrelationHeatmap,
   FloodPointsBarChart,
-  PopulationVsFloodScatterPlot,
-  RainfallVsFloodPointScatterPlot,
-  heatmapData, // (นี่คือข้อมูล Hard-code)
+  SeasonalRainBoxPlot, // (ตัวใหม่)
+  RiskVsRainyScatterPlot, // (ตัวใหม่)
+  heatmapData,
+  heatmapKeys,
 } from "../components/EdaCharts"; // (แก้ path ให้ถูกต้อง)
 
-// --- Component: การ์ดแหล่งข้อมูล ---
+// --- (ย้าย) Component กรอบสำหรับ Chart ---
+const ChartBox = ({ title, description, children }) => (
+  <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
+    <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
+    <p className="text-sm text-gray-600 mb-4">{description}</p>
+    <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 overflow-x-auto">
+      <div className="min-w-[600px] lg:min-w-full">{children}</div>
+    </div>
+  </div>
+);
+
+// --- Component: การ์ดแหล่งข้อมูล (ไม่เปลี่ยนแปลง) ---
 const DataSourceCard = ({ title, format, source, icon: Icon, url }) => (
   <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-300">
     <div className="flex items-center mb-3">
@@ -57,7 +69,7 @@ const DataSourceCard = ({ title, format, source, icon: Icon, url }) => (
   </div>
 );
 
-// --- Component: ขั้นตอน EDA ---
+// --- Component: ขั้นตอน EDA (ไม่เปลี่ยนแปลง) ---
 const EdaStep = ({ number, title, description }) => (
   <li className="flex mb-4">
     <span className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-blue-600 text-white rounded-full font-bold">
@@ -70,7 +82,7 @@ const EdaStep = ({ number, title, description }) => (
   </li>
 );
 
-// --- Component: ตาราง ER Diagram ---
+// --- Component: ตาราง ER Diagram (ไม่เปลี่ยนแปลง) ---
 const EREntity = ({ title, attributes, isMain = false }) => {
   const bgColor = isMain ? "bg-blue-600" : "bg-gray-50";
   const titleColor = isMain ? "text-white" : "text-gray-900";
@@ -128,14 +140,15 @@ const EREntity = ({ title, attributes, isMain = false }) => {
   );
 };
 
-// --- Component: ตารางแสดงข้อมูล CSV ---
+// --- Component: ตารางแสดงข้อมูล CSV (ไม่เปลี่ยนแปลง) ---
 const DataTableViewer = () => {
   const [data, setData] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    csv("/data/master_features_engineered.csv")
+    // (แก้) โหลดไฟล์ใหม่ (master_district_features.csv)
+    csv("/data/master_district_features.csv")
       .then((loadedData) => {
         const slicedData = loadedData.slice(0, 50);
         setData(slicedData);
@@ -158,7 +171,7 @@ const DataTableViewer = () => {
   if (data.length === 0) {
     return (
       <div className="text-center p-10 text-lg text-red-600">
-        ไม่สามารถโหลดข้อมูล <code>master_features_engineered.csv</code> ได้
+        ไม่สามารถโหลดข้อมูล <code>master_district_features.csv</code> ได้
         <br />
         โปรดตรวจสอบว่าไฟล์อยู่ที่ <code>/public/data/</code>
       </div>
@@ -202,18 +215,6 @@ const DataTableViewer = () => {
   );
 };
 
-// --- Component กรอบสำหรับ Chart ---
-const ChartBox = ({ title, description, children }) => (
-  <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-    <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
-    <p className="text-sm text-gray-600 mb-4">{description}</p>
-    <div className="bg-gray-50 p-2 rounded-lg border border-gray-200 overflow-x-auto">
-      <div className="min-w-[600px] lg:min-w-full">{children}</div>
-    </div>
-  </div>
-);
-
-// --- หน้าหลัก (DataPage) ---
 export default function DataPage() {
   // (ใหม่) State สำหรับเก็บข้อมูลกราฟ EDA
   const [chartData, setChartData] = useState(null);
@@ -223,15 +224,18 @@ export default function DataPage() {
   useEffect(() => {
     async function loadEdaData() {
       try {
-        const featuresCsv = await csv("/data/master_features_engineered.csv");
+        // (แก้) โหลดไฟล์ใหม่
+        const featuresCsv = await csv("/data/master_district_features.csv");
 
         // --- ประมวลผลข้อมูล Features (สำหรับ Charts) ---
         const processedFeatures = featuresCsv.map((d) => ({
           dname: d.dname,
           district_group: d.district_group,
-          flood_point_count: +d.flood_point_count || 0,
-          population_density: +d.population_density || 0,
-          rain_max_24h: +d.rain_max_24h || 0,
+          flood_point_count: +d.จำนวนจุดเสี่ยง || 0, // (แก้) ใช้ "จำนวนจุดเสี่ยง"
+          risk_score: +d.คะแนนรวม || 0,
+          avg_rain_rainy: +d.avg_rain_rainy || 0,
+          avg_rain_summer: +d.avg_rain_summer || 0,
+          avg_rain_winter: +d.avg_rain_winter || 0,
         }));
 
         const barChartData = [...processedFeatures]
@@ -239,33 +243,27 @@ export default function DataPage() {
           .slice(0, 10)
           .map((d) => ({
             district: d.dname,
-            จำนวนจุดอ่อนน้ำท่วม: d.flood_point_count,
+            จำนวนจุดเสี่ยง: d.flood_point_count, // (แก้)
           }))
-          .sort((a, b) => a["จำนวนจุดอ่อนน้ำท่วม"] - b["จำนวนจุดอ่อนน้ำท่วม"]);
+          .sort((a, b) => a["จำนวนจุดเสี่ยง"] - b["จำนวนจุดเสี่ยง"]);
 
-        const scatterPlotData = Object.values(
-          processedFeatures.reduce((acc, d) => {
-            const group = d.district_group;
-            if (group && typeof group === "string" && group.trim() !== "") {
-              if (!acc[group]) acc[group] = { id: group, data: [] };
-              acc[group].data.push({
-                x: d.population_density,
-                y: d.flood_point_count,
-                name: d.dname,
-              });
-            }
-            return acc;
-          }, {})
-        );
+        // (ใหม่) ประมวลผล Box Plot
+        const boxPlotData = [];
+        processedFeatures.forEach((d) => {
+          boxPlotData.push({ group: "Winter", value: d.avg_rain_winter });
+          boxPlotData.push({ group: "Summer", value: d.avg_rain_summer });
+          boxPlotData.push({ group: "Rainy", value: d.avg_rain_rainy });
+        });
 
-        const rainVsFloodData = Object.values(
+        // (ใหม่) ประมวลผล Scatter Plot (Risk vs Rainy)
+        const riskVsRainyData = Object.values(
           processedFeatures.reduce((acc, d) => {
-            const group = d.district_group;
-            if (group && typeof group === "string" && group.trim() !== "") {
-              if (!acc[group]) acc[group] = { id: group, data: [] };
+            const group = d.district_group || "ไม่ระบุ";
+            if (group && !acc[group]) acc[group] = { id: group, data: [] };
+            if (group) {
               acc[group].data.push({
-                x: d.rain_max_24h,
-                y: d.flood_point_count,
+                x: d.avg_rain_rainy,
+                y: d.risk_score,
                 name: d.dname,
               });
             }
@@ -275,8 +273,8 @@ export default function DataPage() {
 
         setChartData({
           barChartData,
-          scatterPlotData,
-          rainVsFloodData,
+          boxPlotData, // (ใหม่)
+          riskVsRainyData, // (ใหม่)
         });
       } catch (error) {
         console.error("Failed to load EDA chart data:", error);
@@ -527,14 +525,15 @@ export default function DataPage() {
           </div>
           <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-200">
             <p className="text-lg text-gray-700 mb-6 text-center">
-              ตารางข้อมูลจากไฟล์ <code>master_features_engineered.csv</code>{" "}
-              (แสดง 50 แถวแรก)
+              {/* (แก้) อัปเดตชื่อไฟล์เป็นตัวที่ใช้จริง */}
+              ตารางข้อมูลจากไฟล์ <code>master_district_features.csv</code> (แสดง
+              50 แถวแรก)
             </p>
             <DataTableViewer />
           </div>
         </section>
 
-        {/* --- (ใหม่) 4. EDA Visualization Section --- */}
+        {/* --- 4. EDA Visualization Section (ที่ย้ายมา) --- */}
         <section className="mb-16">
           <div className="flex justify-center items-center gap-4 mb-8">
             <Grid className="w-10 h-10 text-blue-600" />
@@ -554,36 +553,40 @@ export default function DataPage() {
             {/* --- ส่วนแสดงผลกราฟ (เมื่อโหลดเสร็จ) --- */}
             {!isLoadingCharts && chartData && (
               <div className="space-y-8">
+                {/* (แก้) เราจะใช้ Grid 2x2 สำหรับกราฟใหม่ */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <ChartBox
-                    title="1. Correlation Heatmap"
-                    description="ความสัมพันธ์ระหว่างตัวแปร (ข้อมูล Hard-code)"
+                    title="1. Correlation Heatmap (Seasonal)"
+                    description="ความสัมพันธ์ระหว่างตัวแปร (ใช้ข้อมูลฤดู)"
                   >
-                    <CorrelationHeatmap data={heatmapData} />
+                    <CorrelationHeatmap data={heatmapData} keys={heatmapKeys} />
                   </ChartBox>
                   <ChartBox
                     title="2. Top 10 Districts by Flood Points"
-                    description="10 อันดับเขตที่มีจุดอ่อนน้ำท่วมมากที่สุด"
+                    description="10 อันดับเขตที่มีจุดเสี่ยงมากที่สุด"
                   >
                     <FloodPointsBarChart data={chartData.barChartData} />
                   </ChartBox>
                   <ChartBox
-                    title="3. Population Density vs. Flood Points"
-                    description="เปรียบเทียบความหนาแน่นประชากร กับ จำนวนจุดอ่อนน้ำท่วม"
+                    title="3. Seasonal Rain Distribution"
+                    description="เปรียบเทียบการกระจายตัวของฝนใน 3 ฤดู"
                   >
-                    <PopulationVsFloodScatterPlot
-                      data={chartData.scatterPlotData}
-                    />
+                    <SeasonalRainBoxPlot data={chartData.boxPlotData} />
                   </ChartBox>
                   <ChartBox
-                    title="4. Max Rainfall vs. Flood Points"
-                    description="เปรียบเทียบปริมาณฝนสูงสุด 24 ชม. กับ จำนวนจุดอ่อนน้ำท่วม"
+                    title="4. Risk Score vs. Rainy Season"
+                    description="เปรียบเทียบความเสี่ยง กับ ค่าเฉลี่ยฝนในฤดูฝน"
                   >
-                    <RainfallVsFloodPointScatterPlot
-                      data={chartData.rainVsFloodData}
-                    />
+                    <RiskVsRainyScatterPlot data={chartData.riskVsRainyData} />
                   </ChartBox>
                 </div>
+              </div>
+            )}
+            {/* (แก้) ส่วนแสดง Error หากโหลดกราฟไม่สำเร็จ */}
+            {!isLoadingCharts && !chartData && (
+              <div className="text-center p-10 text-lg text-red-600">
+                ไม่สามารถโหลดข้อมูล <code>master_district_features.csv</code>{" "}
+                สำหรับกราฟได้
               </div>
             )}
           </div>

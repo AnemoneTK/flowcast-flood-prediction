@@ -4,21 +4,15 @@ import fs from "fs/promises";
 import path from "path";
 import Papa from "papaparse";
 
-// (สำคัญ!) นี่คือ Path ไปยังไฟล์ CSV ของคุณบน Server
+// (สำคัญ!) นี่คือ Path ไปยังไฟล์ CSV (ตัวใหม่) ของคุณบน Server
 const CSV_FILE_PATH = path.resolve(
-  // ใช้ resolve เพื่อความแน่นอน
   process.cwd(), // นี่คือ /frontend
   "..", // ถอยไปที่ /flowcast-flood-prediction
   "data",
   "PROCESSED",
   // --- *** นี่คือจุดที่แก้ไข *** ---
   "master_features_clustered_seasonal.csv"
-  // --- *** จบจุดที่แก้ไข *** ---
 );
-
-// ... (โค้ดที่เหลือของไฟล์นี้เหมือนเดิม) ...
-// (ฟังก์ชัน getRainData และ GET)
-// (ตรวจสอบให้แน่ใจว่าฟังก์ชัน GET อ่าน filePath ที่ถูกต้อง)
 
 let dataCache = null;
 
@@ -32,7 +26,7 @@ async function getData() {
     const parsed = Papa.parse(fileContent, {
       header: true,
       skipEmptyLines: true,
-      dynamicTyping: true,
+      dynamicTyping: true, // พยายามแปลงตัวเลข
     });
 
     dataCache = parsed.data;
@@ -40,6 +34,7 @@ async function getData() {
     return dataCache;
   } catch (err) {
     console.error("API [data] Error: Failed to read CSV:", err);
+    // (สำคัญ) ส่ง Error ที่อ่านง่ายขึ้น
     throw new Error(
       `Could not load data. Path: ${CSV_FILE_PATH}. Error: ${err.message}`
     );
