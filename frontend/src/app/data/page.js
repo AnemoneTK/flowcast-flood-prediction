@@ -21,16 +21,14 @@ import {
   Grid,
 } from "lucide-react";
 import {
-  // --- (แก้ไข) Import กราฟ 4 ตัวใหม่ + ข้อมูล Heatmap ---
-  CorrelationHeatmap,
-  FloodPointsBarChart,
-  SeasonalRainBoxPlot, // (ตัวใหม่)
-  RiskVsRainyScatterPlot, // (ตัวใหม่)
-  heatmapData,
-  heatmapKeys,
+  // --- (แก้) Import กราฟ 4 ตัวใหม่ ---
+  ClusterProfileBarChart,
+  RiskVsDensityScatterPlot,
+  RiskVsPumpReadinessScatterPlot, // (ใหม่)
+  RainySeasonByClusterBoxPlot, // (ใหม่)
 } from "../components/EdaCharts"; // (แก้ path ให้ถูกต้อง)
 
-// --- (ย้าย) Component กรอบสำหรับ Chart ---
+// --- Component กรอบสำหรับ Chart ---
 const ChartBox = ({ title, description, children }) => (
   <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
     <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
@@ -140,15 +138,16 @@ const EREntity = ({ title, attributes, isMain = false }) => {
   );
 };
 
-// --- Component: ตารางแสดงข้อมูล CSV (ไม่เปลี่ยนแปลง) ---
+// --- (แก้) Component: ตารางแสดงข้อมูล CSV ---
 const DataTableViewer = () => {
   const [data, setData] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // (แก้) โหลดไฟล์ใหม่ (master_district_features.csv)
-    csv("/data/master_district_features.csv")
+    // (แก้) โหลดไฟล์ใหม่ (master_features_final.csv)
+    // path นี้ถูกต้อง ( / ) หมายถึง root ของ public folder
+    csv("/data/master_features_clustered_seasonal.csv")
       .then((loadedData) => {
         const slicedData = loadedData.slice(0, 50);
         setData(slicedData);
@@ -171,9 +170,13 @@ const DataTableViewer = () => {
   if (data.length === 0) {
     return (
       <div className="text-center p-10 text-lg text-red-600">
-        ไม่สามารถโหลดข้อมูล <code>master_district_features.csv</code> ได้
+        {/* (แก้) อัปเดตชื่อไฟล์ */}
+        ไม่สามารถโหลดข้อมูล <code>master_features_final.csv</code> ได้
         <br />
-        โปรดตรวจสอบว่าไฟล์อยู่ที่ <code>/public/data/</code>
+        (โปรดลอง Restart dev server หากไฟล์อยู่ที่ <code>
+          /public/data/
+        </code>{" "}
+        แล้ว)
       </div>
     );
   }
@@ -185,7 +188,7 @@ const DataTableViewer = () => {
           <tr>
             {headers.map((header, index) => (
               <th
-                key={`${header}-${index}`} // แก้ key ซ้ำ
+                key={`${header}-${index}`}
                 scope="col"
                 className="py-3 px-6 whitespace-nowrap"
               >
@@ -215,54 +218,89 @@ const DataTableViewer = () => {
   );
 };
 
+// --- (แก้) Component หลักของหน้า Data ---
 export default function DataPage() {
-  // (ใหม่) State สำหรับเก็บข้อมูลกราฟ EDA
   const [chartData, setChartData] = useState(null);
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
 
-  // (ใหม่) useEffect สำหรับโหลดข้อมูล EDA
+  // (แก้) useEffect สำหรับโหลดข้อมูล EDA
   useEffect(() => {
     async function loadEdaData() {
       try {
         // (แก้) โหลดไฟล์ใหม่
-        const featuresCsv = await csv("/data/master_district_features.csv");
+        // path นี้ถูกต้อง ( / ) หมายถึง root ของ public folder
+        const dataUrl = "/data/master_features_clustered_seasonal.csv";
+        const featuresCsv = await csv(dataUrl);
 
-        // --- ประมวลผลข้อมูล Features (สำหรับ Charts) ---
+        // --- (แก้) ประมวลผลข้อมูล Features (สำหรับ Charts) ---
         const processedFeatures = featuresCsv.map((d) => ({
           dname: d.dname,
-          district_group: d.district_group,
-          flood_point_count: +d.จำนวนจุดเสี่ยง || 0, // (แก้) ใช้ "จำนวนจุดเสี่ยง"
           risk_score: +d.คะแนนรวม || 0,
+          cluster: d.cluster || "N/A",
+          // Features for Profile
+          population_density: +d.population_density || 0,
+          canal_density: +d.canal_density || 0,
+          flood_point_density: +d.flood_point_density || 0,
+          pump_readiness_ratio: +d.pump_readiness_ratio || 0,
+          // Features for BoxPlot
           avg_rain_rainy: +d.avg_rain_rainy || 0,
-          avg_rain_summer: +d.avg_rain_summer || 0,
-          avg_rain_winter: +d.avg_rain_winter || 0,
         }));
 
-        const barChartData = [...processedFeatures]
-          .sort((a, b) => b.flood_point_count - a.flood_point_count)
-          .slice(0, 10)
-          .map((d) => ({
-            district: d.dname,
-            จำนวนจุดเสี่ยง: d.flood_point_count, // (แก้)
-          }))
-          .sort((a, b) => a["จำนวนจุดเสี่ยง"] - b["จำนวนจุดเสี่ยง"]);
+        const featuresToProfile = [
+          "population_density",
+          "canal_density",
+          "flood_point_density",
+          "pump_readiness_ratio",
+        ];
 
-        // (ใหม่) ประมวลผล Box Plot
-        const boxPlotData = [];
+        // --- (กราฟ 1) ข้อมูล Cluster Profile Bar Chart ---
+        const clusterGroups = {};
         processedFeatures.forEach((d) => {
-          boxPlotData.push({ group: "Winter", value: d.avg_rain_winter });
-          boxPlotData.push({ group: "Summer", value: d.avg_rain_summer });
-          boxPlotData.push({ group: "Rainy", value: d.avg_rain_rainy });
+          if (d.cluster === "N/A") return;
+          const clusterName = `Cluster ${d.cluster}`;
+          if (!clusterGroups[clusterName]) {
+            clusterGroups[clusterName] = { cluster: clusterName, count: 0 };
+            featuresToProfile.forEach(
+              (f) => (clusterGroups[clusterName][f] = 0)
+            );
+          }
+          featuresToProfile.forEach(
+            (f) => (clusterGroups[clusterName][f] += d[f])
+          );
+          clusterGroups[clusterName].count += 1;
         });
 
-        // (ใหม่) ประมวลผล Scatter Plot (Risk vs Rainy)
-        const riskVsRainyData = Object.values(
+        const avgData = Object.values(clusterGroups).map((c) => {
+          featuresToProfile.forEach((f) => (c[f] = c[f] / c.count));
+          return c;
+        });
+
+        const maxValues = {};
+        featuresToProfile.forEach((f) => {
+          maxValues[f] = Math.max(...avgData.map((d) => d[f]));
+        });
+
+        const clusterProfileData = avgData
+          .map((d) => {
+            const scaledData = { cluster: d.cluster };
+            featuresToProfile.forEach((f) => {
+              scaledData[f] = maxValues[f] > 0 ? d[f] / maxValues[f] : 0;
+            });
+            return scaledData;
+          })
+          .sort((a, b) => a.cluster.localeCompare(b.cluster));
+
+        const clusterProfileKeys = featuresToProfile;
+
+        // --- (กราฟ 2) ข้อมูล Scatter Plot (Risk vs Pop. Density) ---
+        const riskVsDensityData = Object.values(
           processedFeatures.reduce((acc, d) => {
-            const group = d.district_group || "ไม่ระบุ";
+            const group = `Cluster ${d.cluster}` || "ไม่ระบุ";
+            if (d.cluster === "N/A") return acc;
             if (group && !acc[group]) acc[group] = { id: group, data: [] };
             if (group) {
               acc[group].data.push({
-                x: d.avg_rain_rainy,
+                x: d.population_density,
                 y: d.risk_score,
                 name: d.dname,
               });
@@ -271,10 +309,42 @@ export default function DataPage() {
           }, {})
         );
 
+        // --- (ใหม่ - กราฟ 3) ข้อมูล Scatter Plot (Risk vs Pump Readiness) ---
+        const riskVsPumpData = Object.values(
+          processedFeatures.reduce((acc, d) => {
+            const group = `Cluster ${d.cluster}` || "ไม่ระบุ";
+            if (d.cluster === "N/A") return acc;
+            if (group && !acc[group]) acc[group] = { id: group, data: [] };
+            if (group) {
+              acc[group].data.push({
+                x: d.pump_readiness_ratio, // (แก้)
+                y: d.risk_score,
+                name: d.dname,
+              });
+            }
+            return acc;
+          }, {})
+        );
+
+        // --- (ใหม่ - กราฟ 4) ข้อมูล Box Plot (Rainy Season by Cluster) ---
+        const rainyBoxPlotData = processedFeatures
+          .filter((d) => d.cluster !== "N/A" && !isNaN(d.avg_rain_rainy))
+          .map((d) => ({
+            group: `Cluster ${d.cluster}`,
+            value: d.avg_rain_rainy,
+          }));
+
+        const rainyClusterGroups = [
+          ...new Set(rainyBoxPlotData.map((d) => d.group)),
+        ].sort();
+
         setChartData({
-          barChartData,
-          boxPlotData, // (ใหม่)
-          riskVsRainyData, // (ใหม่)
+          clusterProfileData,
+          clusterProfileKeys,
+          riskVsDensityData,
+          riskVsPumpData, // (ใหม่)
+          rainyBoxPlotData, // (ใหม่)
+          rainyClusterGroups, // (ใหม่)
         });
       } catch (error) {
         console.error("Failed to load EDA chart data:", error);
@@ -289,7 +359,7 @@ export default function DataPage() {
   return (
     <div className="bg-gray-50 min-h-screen flex flex-col">
       <div className="container mx-auto px-4 pt-16">
-        {/* --- Header --- */}
+        {/* --- Header (ไม่เปลี่ยนแปลง) --- */}
         <div className="text-center mb-16">
           <Share2 className="w-16 h-16 text-blue-600 mx-auto mb-4" />
           <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
@@ -300,7 +370,7 @@ export default function DataPage() {
           </p>
         </div>
 
-        {/* --- 1. Data Sources Section --- */}
+        {/* --- 1. Data Sources Section (ไม่เปลี่ยนแปลง) --- */}
         <section className="mb-16">
           <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">
             แหล่งข้อมูล (Data Sources)
@@ -372,7 +442,7 @@ export default function DataPage() {
           </div>
         </section>
 
-        {/* --- 2. EDA & Preparation Section --- */}
+        {/* --- 2. EDA & Preparation Section (ไม่เปลี่ยนแปลง) --- */}
         <section className="mb-16">
           <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">
             การสำรวจและเตรียมข้อมูล (EDA)
@@ -398,7 +468,7 @@ export default function DataPage() {
                       { name: "dname", desc: "ชื่อเขต", type: "PK" },
                       { name: "AREA", desc: "พื้นที่ (ตร.ม.)", type: "Attr" },
                       { name: "population", desc: "ประชากร", type: "Attr" },
-                      { name: "geometry", desc: "ข้อมูลพิกัด", type: "Attr" }, // (แก้) แก้ typo
+                      { name: "geometry", desc: "ข้อมูลพิกัด", type: "Attr" },
                     ]}
                   />
                 </div>
@@ -419,7 +489,7 @@ export default function DataPage() {
                     title="Flood Gates"
                     attributes={[
                       { name: "id_flood", desc: "ID ประตูน้ำ", type: "PK" },
-                      { name: "dcode", desc: "รหัสเขต", type: "FK" }, // (แก้) แก้ typo
+                      { name: "dcode", desc: "รหัสเขต", type: "FK" },
                       { name: "name", desc: "ชื่อประตูน้ำ", type: "Attr" },
                     ]}
                   />
@@ -526,8 +596,8 @@ export default function DataPage() {
           <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-200">
             <p className="text-lg text-gray-700 mb-6 text-center">
               {/* (แก้) อัปเดตชื่อไฟล์เป็นตัวที่ใช้จริง */}
-              ตารางข้อมูลจากไฟล์ <code>master_district_features.csv</code> (แสดง
-              50 แถวแรก)
+              ตารางข้อมูลจากไฟล์ <code>master_features_final.csv</code> (แสดง 50
+              แถวแรก)
             </p>
             <DataTableViewer />
           </div>
@@ -550,42 +620,58 @@ export default function DataPage() {
               </div>
             )}
 
-            {/* --- ส่วนแสดงผลกราฟ (เมื่อโหลดเสร็จ) --- */}
+            {/* --- (แก้) ส่วนแสดงผลกราฟ (เมื่อโหลดเสร็จ) --- */}
             {!isLoadingCharts && chartData && (
               <div className="space-y-8">
-                {/* (แก้) เราจะใช้ Grid 2x2 สำหรับกราฟใหม่ */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* --- กราฟ 1 (คงเดิม) --- */}
                   <ChartBox
-                    title="1. Correlation Heatmap (Seasonal)"
-                    description="ความสัมพันธ์ระหว่างตัวแปร (ใช้ข้อมูลฤดู)"
+                    title="1. โปรไฟล์เฉลี่ยของแต่ละ Cluster"
+                    description="เปรียบเทียบค่าเฉลี่ย (ปรับสเกล 0-1) ของ 4 ปัจจัยหลักในแต่ละ Cluster"
                   >
-                    <CorrelationHeatmap data={heatmapData} keys={heatmapKeys} />
+                    <ClusterProfileBarChart
+                      data={chartData.clusterProfileData}
+                      keys={chartData.clusterProfileKeys}
+                    />
                   </ChartBox>
+
+                  {/* --- กราฟ 2 (คงเดิม) --- */}
                   <ChartBox
-                    title="2. Top 10 Districts by Flood Points"
-                    description="10 อันดับเขตที่มีจุดเสี่ยงมากที่สุด"
+                    title="2. Risk Score vs. Population Density (จำแนกตาม Cluster)"
+                    description="เปรียบเทียบ 'คะแนนความเสี่ยง' (Y) กับ 'ความหนาแน่นประชากร' (X)"
                   >
-                    <FloodPointsBarChart data={chartData.barChartData} />
+                    <RiskVsDensityScatterPlot
+                      data={chartData.riskVsDensityData}
+                    />
                   </ChartBox>
+
+                  {/* --- กราฟ 3 (ใหม่) --- */}
                   <ChartBox
-                    title="3. Seasonal Rain Distribution"
-                    description="เปรียบเทียบการกระจายตัวของฝนใน 3 ฤดู"
+                    title="3. Risk Score vs. Pump Readiness (จำแนกตาม Cluster)"
+                    description="เปรียบเทียบ 'คะแนนความเสี่ยง' (Y) กับ 'อัตราส่วนความพร้อมเครื่องสูบน้ำ' (X)"
                   >
-                    <SeasonalRainBoxPlot data={chartData.boxPlotData} />
+                    <RiskVsPumpReadinessScatterPlot
+                      data={chartData.riskVsPumpData}
+                    />
                   </ChartBox>
+
+                  {/* --- กราฟ 4 (ใหม่) --- */}
                   <ChartBox
-                    title="4. Risk Score vs. Rainy Season"
-                    description="เปรียบเทียบความเสี่ยง กับ ค่าเฉลี่ยฝนในฤดูฝน"
+                    title="4. การกระจายตัวของฝน (ฤดูฝน) ตาม Cluster"
+                    description="เปรียบเทียบการกระจายตัวของ 'ค่าเฉลี่ยฝนในฤดูฝน' (avg_rain_rainy) ของแต่ละ Cluster"
                   >
-                    <RiskVsRainyScatterPlot data={chartData.riskVsRainyData} />
+                    <RainySeasonByClusterBoxPlot
+                      data={chartData.rainyBoxPlotData}
+                      groups={chartData.rainyClusterGroups}
+                    />
                   </ChartBox>
                 </div>
               </div>
             )}
-            {/* (แก้) ส่วนแสดง Error หากโหลดกราฟไม่สำเร็จ */}
+
             {!isLoadingCharts && !chartData && (
               <div className="text-center p-10 text-lg text-red-600">
-                ไม่สามารถโหลดข้อมูล <code>master_district_features.csv</code>{" "}
+                ไม่สามารถโหลดข้อมูล <code>master_features_final.csv</code>{" "}
                 สำหรับกราฟได้
               </div>
             )}
@@ -593,7 +679,6 @@ export default function DataPage() {
         </section>
       </div>{" "}
       {/* --- จบส่วนเนื้อหาหลัก --- */}
-      {/* 'mt-auto' จะผลักส่วนนี้ไปล่างสุดของหน้าจอ */}
       <div className="container mx-auto px-4 pt-16 pb-16 text-center mt-auto">
         <Link
           href="/dashboard"
