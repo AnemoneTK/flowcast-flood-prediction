@@ -557,8 +557,8 @@ export default function DataPage() {
         <section className="mb-16">
           <div className="flex justify-center items-center gap-4 mb-8">
             <Droplet className="w-10 h-10 text-cyan-600" />
-            <Thermometer className="w-10 h-10 text-red-600" />
-            <LayoutGrid className="w-10 h-10 text-purple-600" />
+            {/* <Thermometer className="w-10 h-10 text-red-600" />
+            <LayoutGrid className="w-10 h-10 text-purple-600" /> */}
             <h2 className="text-3xl font-bold text-gray-900 text-center">
               การวิเคราะห์ข้อมูลฝนและปัจจัย
             </h2>
@@ -616,14 +616,14 @@ export default function DataPage() {
         </section>
       </div>{" "}
       {/* --- จบส่วนเนื้อหาหลัก --- */}
-      <div className="container mx-auto px-4 pt-16 pb-16 text-center mt-auto">
+      {/* <div className="container mx-auto px-4 pt-16 pb-16 text-center mt-auto">
         <Link
           href="/dashboard"
           className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
         >
           ไปที่หน้า Interactive Dashboard
         </Link>
-      </div>
+      </div> */}
     </div>
   );
 }

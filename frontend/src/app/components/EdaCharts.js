@@ -317,12 +317,13 @@ export const FeatureHeatmap = () => {
               padding: "8px",
               textAlign: "center",
               fontWeight: "bold",
-              transform: "rotate(-45deg)",
+              // transform: "rotate(-45deg)",
               transformOrigin: "center",
               height: "80px",
               display: "flex",
               alignItems: "flex-end",
               justifyContent: "center",
+              color: "#1f1f1f",
             }}
           >
             {label}
@@ -339,6 +340,7 @@ export const FeatureHeatmap = () => {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "flex-end",
+                color: "#1f1f1f",
               }}
             >
               {row.id}
