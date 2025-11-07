@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import Papa from "papaparse";
 
+// ... (Path และ Cache declarations ไม่เปลี่ยนแปลง) ...
 const RISK_CSV_PATH = path.resolve(
   process.cwd(),
   "public",
@@ -20,6 +21,7 @@ const MAP_CSV_PATH = path.resolve(
 let riskDataCache = null;
 let districtMapCache = null;
 
+// ... (Function: getDistrictMap ไม่เปลี่ยนแปลง) ...
 async function getDistrictMap() {
   if (districtMapCache) return districtMapCache;
   try {
@@ -42,6 +44,7 @@ async function getDistrictMap() {
   }
 }
 
+// ... (Function: getRiskData ไม่เปลี่ยนแปลง) ...
 async function getRiskData() {
   if (riskDataCache) return riskDataCache;
   try {
@@ -79,23 +82,13 @@ export async function GET(request) {
     const allRiskData = await getRiskData();
     let filteredData;
 
-    // (ปรับแก้) สร้างฟังก์ชันกรองเดือนที่ปลอดภัย
-    const monthFilter = (row) => {
-      if (month === "all") return true;
-      if (!row.date) return false; // *** (จุดแก้ไข) ตรวจสอบว่า date มีค่าก่อน ***
-      try {
+    if (dcode === "all") {
+      filteredData = allRiskData.filter((row) => {
+        if (month === "all") return true;
         const rowMonth = new Date(row.date).getMonth() + 1;
         return rowMonth.toString() === month;
-      } catch (e) {
-        return false;
-      }
-    };
-
-    if (dcode === "all") {
-      // กรองตามเดือน (ที่ถูกต้อง)
-      filteredData = allRiskData.filter(monthFilter);
+      });
     } else {
-      // กรองตามเขตและเดือน (ที่ถูกต้อง)
       const districtMap = await getDistrictMap();
       const districtName = districtMap.get(dcode);
 
@@ -108,7 +101,11 @@ export async function GET(request) {
 
       filteredData = allRiskData.filter((row) => {
         const isDistrictMatch = row.district_name_th === districtName;
-        return isDistrictMatch && monthFilter(row);
+        if (month === "all") {
+          return isDistrictMatch;
+        }
+        const rowMonth = new Date(row.date).getMonth() + 1;
+        return isDistrictMatch && rowMonth.toString() === month;
       });
     }
 
@@ -122,7 +119,7 @@ export async function GET(request) {
         const date = row.date;
         const risk = +row.RiskScore || 0;
 
-        // (ปรับแก้) ตรวจสอบ date อีกครั้ง
+        // (ปรับแก้) ตรวจสอบว่า date มีค่า (ไม่เป็น null, undefined, "")
         if (date) {
           dailyAverage.set(date, (dailyAverage.get(date) || 0) + risk);
           dailyCount.set(date, (dailyCount.get(date) || 0) + 1);
@@ -144,7 +141,8 @@ export async function GET(request) {
       nivoData = [{ id: "Risk Score เฉลี่ยทุกเขต", data: aggregatedPoints }];
     } else {
       const points = filteredData
-        .filter((row) => row.date) // (ปรับแก้) กรอง row ที่ date ไม่มีค่าออก
+        // (ปรับแก้) กรอง row ที่ date ไม่มีค่าออก
+        .filter((row) => row.date)
         .map((row) => ({
           x: row.date,
           y: row.RiskScore,
