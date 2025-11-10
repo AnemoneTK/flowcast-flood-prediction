@@ -112,7 +112,7 @@ export default function HomePage() {
             href="/dashboard"
             className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50"
           >
-            ไปที่ Interactive Dashboard
+            ไปที่ Dashboard
             <ArrowRight className="w-5 h-5 ml-2" />
           </Link>
         </div>
@@ -264,10 +264,20 @@ export default function HomePage() {
             และควรได้รับการดูแลแบบไหน
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+            <ClusterCard title="กลุ่ม 0" description="ความเสี่ยงต่ำ" />
+            <ClusterCard
+              title="กลุ่ม 1"
+              description="ความเสี่ยงสูงจากจุดเสี่ยง"
+            />
+            <ClusterCard
+              title="กลุ่ม 2"
+              description="ความเสี่ยงสูงจากโครงสร้าง"
+            />
+            <ClusterCard title="กลุ่ม 3" description="ที่อยู่อาศัยหนาแน่น" />
+            {/* <ClusterCard title="กลุ่ม 0" description="เมืองหนาแน่น" />
             <ClusterCard title="กลุ่ม 1" description="ชานเมือง/เสี่ยงต่ำ" />
             <ClusterCard title="กลุ่ม 2" description="มรสุมลง/ปั๊มพร้อม" />
-            <ClusterCard title="กลุ่ม 0" description="เมืองหนาแน่น" />
-            <ClusterCard title="กลุ่ม 3" description="เสี่ยงสูง/น่ากังวล" />
+            <ClusterCard title="กลุ่ม 3" description="เสี่ยงสูง/น่ากังวล" /> */}
           </div>
         </div>
       </section>

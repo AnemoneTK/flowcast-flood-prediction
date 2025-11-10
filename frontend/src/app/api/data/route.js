@@ -12,6 +12,7 @@ const CSV_FILE_PATH = path.resolve(
   "PROCESSED",
   // --- *** นี่คือจุดที่แก้ไข *** ---
   "master_features_clustered_seasonal.csv"
+  // "master_features_clustered_v2_pca.csv"
 );
 
 let dataCache = null;

@@ -263,15 +263,17 @@ export default function DashboardPage() {
     async function loadKpiData() {
       try {
         // (ปรับแก้) โหลดไฟล์ master_district_features.csv ไฟล์เดียว
-        const masterData = await csv("/data/master_district_features.csv");
-
+        const masterData = await csv(
+          "/data/master_features_clustered_seasonal.csv"
+        );
+        console.log("Master District Features Data:", masterData);
         const validDistricts = [];
         for (const d of masterData) {
           if (d.dcode && d.dname) {
             validDistricts.push({
               dcode: d.dcode.toString(),
               dname: d.dname,
-              cluster: d.district_group, // (ปรับแก้) ใช้ 'district_group'
+              cluster: d.cluster, // (ปรับแก้) ใช้ 'district_group'
               canal_count: +d.canal_count || 0,
               pump_number: +d.pump_number || 0,
               risk_point_count: +d["จำนวนจุดเสี่ยง"] || 0, // (แก้บั๊ก)
@@ -482,7 +484,7 @@ export default function DashboardPage() {
     <div className="bg-gray-50 min-h-screen">
       <div className="container mx-auto p-4 py-16">
         <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-6 text-center">
-          Interactive Dashboard
+          Flood Risk Dashboard for Bangkok 2024
         </h1>
         <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-12 text-center">
           เลือกเขตและเดือนที่คุณสนใจ เพื่อดูข้อมูลเชิงลึก
