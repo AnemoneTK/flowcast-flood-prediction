@@ -15,6 +15,7 @@
     "@nivo/heatmap": "^0.99.0",
     "@nivo/line": "^0.99.0",
     "@nivo/scatterplot": "^0.99.0",
+    "@supabase/supabase-js": "^2.84.0",
     "d3-fetch": "^3.0.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.552.0",
