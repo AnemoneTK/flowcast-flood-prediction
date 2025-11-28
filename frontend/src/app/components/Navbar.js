@@ -28,7 +28,7 @@ export default function Navbar() {
         {/* 2. Desktop Menu (ซ่อนในจอมือถือ) */}
         <div className="hidden md:flex space-x-6 items-center">
           <Link
-            href="/model"
+            href="/models"
             className="text-gray-600 hover:text-blue-600 transition-colors"
           >
             Model
@@ -68,7 +68,7 @@ export default function Navbar() {
         }`}
       >
         <Link
-          href="/model"
+          href="/models"
           className="block px-5 py-3 text-lg text-gray-700 hover:bg-gray-100"
           onClick={() => setIsOpen(false)} // กดแล้วปิดเมนู
         >

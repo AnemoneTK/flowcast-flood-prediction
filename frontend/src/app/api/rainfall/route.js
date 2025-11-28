@@ -1,165 +1,76 @@
-// frontend/src/app/api/risk-scores/route.js
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-import Papa from "papaparse";
 
-const RISK_CSV_PATH = path.resolve(
-  process.cwd(),
-  "public",
-  "data",
-  "risk_scores_2024.csv"
-);
-const MAP_CSV_PATH = path.resolve(
-  process.cwd(),
-  "public",
-  "data",
-  "master_features_clustered_seasonal.csv"
-);
+export async function GET() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
 
-let riskDataCache = null;
-let districtMapCache = null;
-
-async function getDistrictMap() {
-  if (districtMapCache) return districtMapCache;
   try {
-    const fileContent = await fs.readFile(MAP_CSV_PATH, "utf8");
-    const parsed = Papa.parse(fileContent, {
-      header: true,
-      skipEmptyLines: true,
+    // 1. ดึงข้อมูลฝนจริง (History) ทั้งหมด
+    // เลือกเฉพาะวันที่และปริมาณฝน (is_forecast = false)
+    const { data, error } = await supabase
+      .from("rain_logs")
+      .select("date, rain_24h")
+      .eq("is_forecast", false);
+
+    if (error) throw error;
+
+    // 2. ประมวลผลข้อมูล (Aggregation) ในระดับปีและเดือน
+    // { '2023-0': [10, 20, ...], '2023-1': [...] }
+    const groupedData = {};
+
+    data.forEach((row) => {
+      const date = new Date(row.date);
+      if (isNaN(date)) return; // ข้ามถ้าวันที่ไม่ถูกต้อง
+
+      const year = date.getFullYear();
+      const month = date.getMonth(); // 0 = Jan, 11 = Dec
+      const key = `${year}-${month}`;
+
+      if (!groupedData[key]) groupedData[key] = { sum: 0, count: 0 };
+
+      groupedData[key].sum += row.rain_24h;
+      groupedData[key].count += 1;
     });
-    const map = new Map();
-    for (const row of parsed.data) {
-      if (row.dcode && row.dname) {
-        map.set(row.dcode.toString(), row.dname);
-      }
-    }
-    districtMapCache = map;
-    return districtMapCache;
-  } catch (err) {
-    console.error("API [risk-scores] Error: Failed to read map CSV:", err);
-    throw new Error(`Could not load district map data. Error: ${err.message}`);
-  }
-}
 
-async function getRiskData() {
-  if (riskDataCache) return riskDataCache;
-  try {
-    const fileContent = await fs.readFile(RISK_CSV_PATH, "utf8");
-    const parsed = Papa.parse(fileContent, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: true,
+    // 3. จัด Format ให้ตรงกับ Nivo Line Chart
+    // [ { id: '2023', data: [{x:'Jan', y:10}, ...] }, ... ]
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const years = [2023, 2024, 2025]; // ปีที่เราสนใจ
+    const colors = { 2023: "#94a3b8", 2024: "#3b82f6", 2025: "#f59e0b" }; // เทา, ฟ้า, ส้ม
+
+    const chartData = years.map((year) => {
+      return {
+        id: year.toString(),
+        color: colors[year],
+        data: months.map((monthName, index) => {
+          const key = `${year}-${index}`;
+          const group = groupedData[key];
+          // หาค่าเฉลี่ย (ถ้าไม่มีข้อมูลให้เป็น 0)
+          const avgRain = group ? group.sum / group.count : 0;
+          return { x: monthName, y: avgRain };
+        }),
+      };
     });
-    riskDataCache = parsed.data;
-    return riskDataCache;
-  } catch (err) {
-    console.error("API [risk-scores] Error: Failed to read risk CSV:", err);
-    throw new Error(`Could not load risk data. Error: ${err.message}`);
-  }
-}
 
-export async function GET(request) {
-  try {
-    const { searchParams } = request.nextUrl;
-    const dcode = searchParams.get("dcode");
-    const month = searchParams.get("month");
-
-    if (!dcode || !month) {
-      return NextResponse.json(
-        { error: "Missing dcode or month parameters" },
-        { status: 400 }
-      );
-    }
-
-    if (dcode === "all" && month === "all") {
-      return NextResponse.json([{ id: "Risk Score", data: [] }]);
-    }
-
-    const allRiskData = await getRiskData();
-    let filteredData;
-
-    // (ปรับแก้) สร้างฟังก์ชันกรองเดือนที่ปลอดภัย
-    const monthFilter = (row) => {
-      if (month === "all") return true;
-      if (!row.date) return false; // *** (จุดแก้ไข) ตรวจสอบว่า date มีค่าก่อน ***
-      try {
-        const rowMonth = new Date(row.date).getMonth() + 1;
-        return rowMonth.toString() === month;
-      } catch (e) {
-        return false;
-      }
-    };
-
-    if (dcode === "all") {
-      // กรองตามเดือน (ที่ถูกต้อง)
-      filteredData = allRiskData.filter(monthFilter);
-    } else {
-      // กรองตามเขตและเดือน (ที่ถูกต้อง)
-      const districtMap = await getDistrictMap();
-      const districtName = districtMap.get(dcode);
-
-      if (!districtName) {
-        return NextResponse.json(
-          { error: `District name not found for dcode: ${dcode}` },
-          { status: 404 }
-        );
-      }
-
-      filteredData = allRiskData.filter((row) => {
-        const isDistrictMatch = row.district_name_th === districtName;
-        return isDistrictMatch && monthFilter(row);
-      });
-    }
-
-    let nivoData;
-
-    if (dcode === "all") {
-      const dailyAverage = new Map();
-      const dailyCount = new Map();
-
-      for (const row of filteredData) {
-        const date = row.date;
-        const risk = +row.RiskScore || 0;
-
-        // (ปรับแก้) ตรวจสอบ date อีกครั้ง
-        if (date) {
-          dailyAverage.set(date, (dailyAverage.get(date) || 0) + risk);
-          dailyCount.set(date, (dailyCount.get(date) || 0) + 1);
-        }
-      }
-
-      const aggregatedPoints = [];
-      for (const [date, totalRisk] of dailyAverage.entries()) {
-        const count = dailyCount.get(date);
-        if (count > 0) {
-          aggregatedPoints.push({
-            x: date,
-            y: totalRisk / count,
-          });
-        }
-      }
-
-      aggregatedPoints.sort((a, b) => new Date(a.x) - new Date(b.x));
-      nivoData = [{ id: "Risk Score เฉลี่ยทุกเขต", data: aggregatedPoints }];
-    } else {
-      const points = filteredData
-        .filter((row) => row.date) // (ปรับแก้) กรอง row ที่ date ไม่มีค่าออก
-        .map((row) => ({
-          x: row.date,
-          y: row.RiskScore,
-        }));
-
-      points.sort((a, b) => new Date(a.x) - new Date(b.x));
-      nivoData = [{ id: "Risk Score", data: points }];
-    }
-
-    return NextResponse.json(nivoData);
+    return NextResponse.json(chartData);
   } catch (error) {
-    console.error("API [risk-scores] GET Error:", error);
-    return NextResponse.json(
-      { error: "Failed to process request", details: error.message },
-      { status: 500 }
-    );
+    console.error("API Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
