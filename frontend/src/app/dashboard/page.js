@@ -119,8 +119,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
-      <Navbar />
-
       <main className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 space-y-8">
         {/* 1. Control Panel */}
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col lg:flex-row justify-between items-center gap-6">
