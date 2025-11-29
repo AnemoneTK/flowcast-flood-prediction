@@ -14,7 +14,7 @@ export default function Navbar() {
   return (
     // เปลี่ยนเป็นพื้นหลังสีขาว, เพิ่มเงา (shadow)
     // `relative` เพื่อให้เมนู dropdown มันยึดติดกับ Navbar
-    <nav className="bg-white text-gray-900 shadow-md sticky top-0 z-50">
+    <nav className="bg-white text-gray-900 shadow-md sticky top-0 z-100">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
         {/* 1. Logo (ทำตัวใหญ่ขึ้นและใช้สีน้ำเงิน) */}
         <Link
