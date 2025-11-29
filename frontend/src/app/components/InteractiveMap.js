@@ -166,10 +166,10 @@ export default function InteractiveMap({ selectedDcode, onSelect }) {
           onChange={(e) => setActiveLayer(e.target.value)}
           className="text-sm text-slate-700 outline-none bg-transparent cursor-pointer font-medium min-w-[130px]"
         >
-          <option value="all">แสดงทั้งหมด</option>
-          <option value="risk">⚠️ จุดเสี่ยงน้ำท่วม</option>
+          <option value="all">แสดงจุดเสี่ยงน้ำท่วม</option>
+          {/* <option value="risk">⚠️ จุดเสี่ยงน้ำท่วม</option> */}
           {/* <option value="pump">💧 สถานีสูบน้ำ</option> */}
-          <option value="none">ซ่อนจุด (ดูเฉพาะสีเขต)</option>
+          <option value="none">ปิดจุดเสี่ยงน้ำท่วม</option>
         </select>
       </div>
 

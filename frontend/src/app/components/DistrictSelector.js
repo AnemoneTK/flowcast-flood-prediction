@@ -7,30 +7,31 @@ export default function DistrictSelector({ onSelect }) {
   const [districts, setDistricts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState(""); // ข้อความที่พิมพ์
-  const [selected, setSelected] = useState(null); // Object เขตที่เลือก
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState(null);
 
   const wrapperRef = useRef(null);
 
-  // 1. Fetch ข้อมูลเมื่อโหลด
+  // 1. Fetch ข้อมูล (ดึงรายชื่อเขต)
   useEffect(() => {
     async function fetchDistricts() {
       try {
-        // เรียก API mode=list ที่เราเพิ่งแก้
+        // เรียก API เฉพาะส่วน list
         const res = await fetch("/api/dashboard-analytics?mode=list");
-
-        if (!res.ok) throw new Error("API Fetch failed");
+        if (!res.ok) throw new Error("Fetch failed");
 
         const data = await res.json();
 
-        // ตรวจสอบว่าเป็น Array หรือไม่ ถ้าใช่ให้ set เลย
+        // Debug: ดูว่าได้ข้อมูลมาไหม
+        // console.log("Fetched Districts:", data);
+
+        // รองรับทั้ง Array ตรงๆ และ { data: [...] }
         if (Array.isArray(data)) {
           setDistricts(data);
-        } else if (data.districts && Array.isArray(data.districts)) {
-          // เผื่อกรณี API ส่งกลับมาเป็น { districts: [...] }
-          setDistricts(data.districts);
+        } else if (data.data && Array.isArray(data.data)) {
+          setDistricts(data.data);
         } else {
-          setDistricts([]); // กันตาย
+          setDistricts([]);
         }
       } catch (error) {
         console.error("Error loading districts:", error);
@@ -42,7 +43,7 @@ export default function DistrictSelector({ onSelect }) {
     fetchDistricts();
   }, []);
 
-  // 2. คลิกข้างนอกเพื่อปิด
+  // 2. ปิดเมื่อคลิกข้างนอก
   useEffect(() => {
     function handleClickOutside(event) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
@@ -53,31 +54,41 @@ export default function DistrictSelector({ onSelect }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [wrapperRef]);
 
-  // 3. กรองข้อมูล (Autocomplete)
+  // 3. กรองข้อมูล (Autocomplete Logic)
+  // ต้องเช็ค districts เป็น array ก่อนเสมอ
   const filteredDistricts = Array.isArray(districts)
-    ? districts.filter((d) => d.dname && d.dname.includes(search))
+    ? districts.filter(
+        (d) =>
+          d.dname && d.dname.toLowerCase().includes(search.trim().toLowerCase())
+      )
     : [];
 
-  // User เลือกเขตจาก List
   const handleSelect = (district) => {
+    if (!district) return;
     setSelected(district);
-    setSearch(district.dname); // เอาชื่อไปแปะในช่อง Input
+    setSearch(district.dname);
     setIsOpen(false);
-    if (onSelect) onSelect(district.dcode); // ส่งรหัสเขตไปบอกหน้าแม่
+    if (onSelect) onSelect(district.dcode);
   };
 
-  // User กดปุ่ม X (เคลียร์ค่า)
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      if (filteredDistricts.length > 0) {
+        handleSelect(filteredDistricts[0]);
+      }
+    }
+  };
+
   const handleClear = (e) => {
     e.stopPropagation();
     setSelected(null);
     setSearch("");
     setIsOpen(false);
-    if (onSelect) onSelect(null); // บอกหน้าแม่ว่าไม่เลือกแล้ว
+    if (onSelect) onSelect(null);
   };
 
   return (
     <div className="w-full relative z-[50]" ref={wrapperRef}>
-      {/* Input Area */}
       <div
         className={`flex items-center bg-white border rounded-xl px-4 py-3 shadow-sm transition-all cursor-text
           ${
@@ -87,7 +98,6 @@ export default function DistrictSelector({ onSelect }) {
           }`}
         onClick={() => {
           setIsOpen(true);
-          // ถ้ามีเลือกอยู่แล้ว แล้วมาคลิก -> ให้เคลียร์ text เพื่อพิมพ์ใหม่ได้ง่ายๆ (Optional UX)
           if (selected && search === selected.dname) setSearch("");
         }}
       >
@@ -99,20 +109,19 @@ export default function DistrictSelector({ onSelect }) {
         <input
           type="text"
           className="flex-1 outline-none bg-transparent text-slate-700 placeholder:text-slate-400 text-base"
-          placeholder={loading ? "กำลังโหลด..." : "พิมพ์ชื่อเขต..."}
+          placeholder={loading ? "กำลังโหลด..." : "ค้นหาเขต..."}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
             setIsOpen(true);
-            // ถ้าพิมพ์เปลี่ยนไปจากที่เลือก ให้ถือว่ายกเลิกการเลือกตัวเก่า
             if (selected && e.target.value !== selected.dname)
               setSelected(null);
           }}
           onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
           disabled={loading}
         />
 
-        {/* ปุ่ม Clear / ลูกศร */}
         {selected || search ? (
           <button
             onClick={handleClear}
@@ -130,9 +139,8 @@ export default function DistrictSelector({ onSelect }) {
         )}
       </div>
 
-      {/* Dropdown Results */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-slate-100 shadow-xl max-h-[280px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 custom-scrollbar">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-slate-100 shadow-xl max-h-[280px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 custom-scrollbar z-[100]">
           {loading ? (
             <div className="p-4 text-center text-slate-400 flex justify-center gap-2">
               <Loader2 className="animate-spin" size={16} /> กำลังโหลดข้อมูล...
@@ -177,7 +185,7 @@ export default function DistrictSelector({ onSelect }) {
             </ul>
           ) : (
             <div className="p-4 text-center text-slate-400 text-sm">
-              ไม่พบข้อมูล {`"${search}"`}
+              ไม่พบข้อมูล {"{search}"}
             </div>
           )}
         </div>

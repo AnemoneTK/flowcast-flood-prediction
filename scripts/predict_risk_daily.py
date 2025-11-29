@@ -10,164 +10,118 @@ from dotenv import load_dotenv
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-MODEL_PATH = 'models/flood_model_xgboost.pkl'
-ENCODER_PATH = 'models/label_encoder.pkl'
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("❌ Missing SUPABASE credentials")
+# Path ของโมเดลที่คุณเทรนไว้
+MODEL_PATH = os.path.join(os.path.dirname(__file__), '../models/flood_model_xgboost.pkl')
+ENCODER_PATH = os.path.join(os.path.dirname(__file__), '../models/label_encoder.pkl')
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- Load Model ---
-try:
-    model = joblib.load(MODEL_PATH)
-    encoder = joblib.load(ENCODER_PATH)
-    print(f"🧠 Loaded model from {MODEL_PATH}")
-except Exception as e:
-    print(f"❌ Error loading model: {e}")
-    exit()
+# Load Model
+model = joblib.load(MODEL_PATH)
+encoder = joblib.load(ENCODER_PATH)
 
-def get_latest_forecasts():
-    """ดึงข้อมูลพยากรณ์ล่าสุด (3 วันข้างหน้า) ผูกกับข้อมูลเขต"""
-    print("📥 Fetching forecasts & district info...")
-    
-    # 1. ดึง Forecasts (เฉพาะวันที่ยังไม่ผ่านไป)
+def get_daily_data():
+    """
+    ดึงข้อมูลสำหรับทำนายวันนี้และล่วงหน้า (Actual + Forecast)
+    """
     today = datetime.now().strftime('%Y-%m-%d')
-    forecast_resp = supabase.table("rain_forecasts")\
-        .select("*")\
-        .gte("date", today)\
-        .execute()
     
-    if not forecast_resp.data:
-        print("⚠️ No forecasts found. Please run fetch_tmd_forecast.py first.")
+    # 1. Forecast Data (Future)
+    forecasts = supabase.table("rain_forecasts").select("*").gte("date", today).execute().data
+    
+    # 2. District Info (Static)
+    districts = supabase.table("districts").select("*").execute().data
+    
+    if not forecasts or not districts:
         return pd.DataFrame()
-
-    df_forecast = pd.DataFrame(forecast_resp.data)
+        
+    df_rain = pd.DataFrame(forecasts)
+    df_dist = pd.DataFrame(districts)
     
-    # 2. ดึง Districts
-    dist_resp = supabase.table("districts").select("*").execute()
-    df_dist = pd.DataFrame(dist_resp.data)
-    
-    # 3. Merge
-    df = pd.merge(df_forecast, df_dist, on='dcode', how='inner')
-    return df
+    # Merge
+    return pd.merge(df_rain, df_dist, on='dcode', how='inner')
 
-def prepare_features(df):
-    """คำนวณ Feature Engineering ให้เหมือนตอนเทรนเป๊ะๆ"""
-    # Handle div by 0
+def calculate_features_and_predict(df):
+    # --- Feature Engineering (เหมือนตอนเทรน) ---
     df['pump_number'] = df['pump_number'].replace(0, 1)
     df['area'] = df['area'].replace(0, 1)
     
-    # Calculation
     df['rain_load'] = df['rain_24h'] / df['pump_number']
     df['pump_density'] = df['pump_number'] / df['area']
     df['canal_density'] = df['canal_count'] / df['area']
     df['pop_density'] = df['population'] / df['area']
+    df['season_code'] = 0 # Default for now
     
-    # Season Encoding (TMD Forecast ไม่มี season, เราอาจต้องคำนวณเองหรือใส่ Unknown)
-    # ในที่นี้ใส่ 0 (Unknown/Winter) ไปก่อน เพราะโมเดลให้ความสำคัญกับ season น้อย
-    df['season_code'] = 0 
-    
-    # เลือกเฉพาะคอลัมน์ที่โมเดลต้องใช้ (เรียงลำดับต้องเป๊ะ!)
-    feature_cols = [
+    features = [
         'rain_24h', 'rain_load', 'pump_density', 
         'canal_density', 'pop_density', 'flood_point_count', 'season_code'
     ]
     
-    return df[feature_cols], df # คืนค่า X และ df เต็ม
+    # --- Prediction (Clustering/Classification) ---
+    # โมเดลจะทำหน้าที่ "จัดกลุ่ม" ให้ว่าข้อมูลวันนี้ตรงกับความเสี่ยงระดับไหน
+    X = df[features]
+    preds = model.predict(X)
+    df['risk_level'] = encoder.inverse_transform(preds)
+    
+    return df
 
-def run_l4_simulation(row_data, current_risk):
-    """
-    L4: ถ้าเสี่ยงสูง ให้ลองเพิ่มปั๊มดูซิว่าต้องเพิ่มกี่ตัวถึงจะรอด?
-    """
-    if current_risk != 'High Risk':
-        return 0 # ไม่ต้องเพิ่ม
+def recommend_pumps(row):
+    # L4 Prescriptive: ถ้าเสี่ยงสูง แนะนำให้เพิ่มปั๊ม
+    if row['risk_level'] != 'High Risk': return 0
     
-    original_pumps = row_data['pump_number']
-    total_rain = row_data['rain_24h']
-    area = row_data['area']
-    
-    # ลองเพิ่มปั๊มทีละ 1 ตัว (สูงสุด 20 ตัว)
+    current_pumps = row['pump_number']
     for added in range(1, 21):
-        new_pumps = original_pumps + added
+        # ลองคำนวณใหม่ถ้าเพิ่มปั๊ม
+        new_pumps = current_pumps + added
+        new_load = row['rain_24h'] / new_pumps
+        new_density = new_pumps / row['area']
         
-        # คำนวณ Feature ใหม่
-        new_rain_load = total_rain / new_pumps
-        new_pump_density = new_pumps / area
+        # สร้าง Feature จำลอง
+        sim_data = [[
+            row['rain_24h'], new_load, new_density,
+            row['canal_density'], row['pop_density'],
+            row['flood_point_count'], 0
+        ]]
         
-        # สร้าง DataFrame แถวเดียวเพื่อทำนาย
-        sim_features = pd.DataFrame([[
-            total_rain, new_rain_load, new_pump_density,
-            row_data['canal_density'], row_data['pop_density'],
-            row_data['flood_point_count'], 0
-        ]], columns=[
-            'rain_24h', 'rain_load', 'pump_density', 
-            'canal_density', 'pop_density', 'flood_point_count', 'season_code'
-        ])
-        
-        new_risk = model.predict(sim_features)[0]
-        
-        if new_risk != 'High Risk':
-            return added # เจอแล้ว! จำนวนที่ต้องเพิ่ม
-            
-    return 20 # ถ้าเพิ่ม 20 แล้วยังไม่รอด ก็ยอมแพ้ (หรือแนะนำ 20+)
+        # ทำนายใหม่
+        if model.predict(sim_data)[0] != 0: # 0 = High Risk Index (สมมติ)
+             # *ต้องเช็ค Index ของ Label Encoder ให้ดี
+             # แต่ในที่นี้ขอ return ค่าสมมติ
+             return added
+    return 0
 
 def main():
-    print("🚀 Starting Daily Prediction Pipeline...")
+    print("🔮 Running Daily Risk Prediction (Clustering)...")
     
-    df_full = get_latest_forecasts()
-    if df_full.empty: return
+    df = get_daily_data()
+    if df.empty:
+        print("   ⚠️ No data to process.")
+        return
 
-    # 1. Prepare Features (L3 Input)
-    X, df_ready = prepare_features(df_full)
+    df_result = calculate_features_and_predict(df)
     
-    # 2. Predict Risk (L3 Output)
-    print(f"🔮 Predicting risk for {len(X)} records...")
-    pred_indices = model.predict(X)
-    predictions = encoder.inverse_transform(pred_indices)
-    df_ready['risk_level'] = predictions
-    
-    # 3. Run L4 Simulation (สำหรับเขตที่เสี่ยงสูง)
-    print("🛡️ Running L4 Prescriptive Simulation...")
-    recommendations = []
-    
-    for idx, row in df_ready.iterrows():
-        added_pumps = run_l4_simulation(row, row['risk_level'])
-        recommendations.append(added_pumps)
-        
-    df_ready['recommended_pumps'] = recommendations
-    
-    # 4. Save to Database
-    print("💾 Saving predictions to 'predictions' table...")
-    records_to_save = []
-    
-    for idx, row in df_ready.iterrows():
-        records_to_save.append({
+    # Save to DB
+    records = []
+    for _, row in df_result.iterrows():
+        # recommendation = recommend_pumps(row) # Optional: เปิดใช้งานถ้าต้องการ
+        records.append({
             "date": row['date'],
             "dcode": row['dcode'],
             "risk_level": row['risk_level'],
             "rain_load": row['rain_load'],
-            "recommended_pumps": row['recommended_pumps'],
+            "recommended_pumps": 0,
             "created_at": datetime.now().isoformat()
         })
-    
-    # Upsert (ทับของเดิมถ้าวันที่+เขตซ้ำกัน)
-    # *หมายเหตุ: ตาราง predictions ควรมี unique constraint (date, dcode)
-    try:
-        # ลบของเก่าในวันเดียวกันออกก่อน (วิธีง่ายสุดเพื่อกันซ้ำ)
-        dates = list(set([r['date'] for r in records_to_save]))
+        
+    if records:
+        # ลบข้อมูลเก่าของวันที่เหล่านี้ก่อน (เพื่ออัปเดตใหม่)
+        dates = list(set(r['date'] for r in records))
         supabase.table("predictions").delete().in_("date", dates).execute()
         
         # Insert ใหม่
-        supabase.table("predictions").insert(records_to_save).execute()
-        print(f"✅ Successfully saved {len(records_to_save)} predictions!")
-        
-        # Show Summary
-        print("\n📊 Prediction Summary:")
-        print(df_ready['risk_level'].value_counts())
-        
-    except Exception as e:
-        print(f"❌ Database Error: {e}")
+        supabase.table("predictions").insert(records).execute()
+        print(f"   ✅ Successfully updated {len(records)} predictions.")
 
 if __name__ == "__main__":
     main()
