@@ -1,208 +1,200 @@
-// frontend/src/app/components/InteractiveMap.js
+// src/app/components/InteractiveMap.js
 "use client";
-
-import { useState, useEffect, useMemo } from "react";
-import dynamic from "next/dynamic";
+import { useState, useEffect, useCallback } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  GeoJSON,
+  CircleMarker,
+  Popup,
+  useMap,
+} from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import L from "leaflet";
 
-// Dynamic import สำหรับ Leaflet components
-const MapContainer = dynamic(
-  () => import("react-leaflet").then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import("react-leaflet").then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const GeoJSON = dynamic(
-  () => import("react-leaflet").then((mod) => mod.GeoJSON),
-  { ssr: false }
-);
-const LayersControl = dynamic(
-  () => import("react-leaflet").then((mod) => mod.LayersControl),
-  { ssr: false }
-);
-const LayersControlOverlay = dynamic(
-  () => import("react-leaflet").then((mod) => mod.LayersControl.Overlay),
-  { ssr: false }
-);
+// Fix Icons
+const iconFix = () => {
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+    iconUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+    shadowUrl:
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+  });
+};
+iconFix();
 
-export default function InteractiveMap({ selectedDcode }) {
-  const [L, setL] = useState(null);
-  const [leafletIcons, setLeafletIcons] = useState(null);
-  const [districtGeoJson, setDistrictGeoJson] = useState(null);
-  const [floodPointsGeoJson, setFloodPointsGeoJson] = useState(null);
-  const [floodgatesGeoJson, setFloodgatesGeoJson] = useState(null);
-
-  // Effect สำหรับโหลด Leaflet และตั้งค่า Icons
+function MapUpdater({ bounds }) {
+  const map = useMap();
   useEffect(() => {
-    import("leaflet").then((leaflet) => {
-      const LeafletModule = leaflet.default;
-      setL(LeafletModule);
+    if (bounds && bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [bounds, map]);
+  return null;
+}
 
-      // 1. แก้บั๊ก iconUrl ของ Leaflet
-      delete LeafletModule.Icon.Default.prototype._getIconUrl;
-      LeafletModule.Icon.Default.mergeOptions({
-        iconRetinaUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-        iconUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-        shadowUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-      });
+// รับ onSelect มาเพื่อใช้ตอนกดปุ่มใน Popup
+export default function InteractiveMap({ selectedDcode, onSelect }) {
+  const [mapData, setMapData] = useState({ districts: null, riskPoints: null });
+  const [loading, setLoading] = useState(true);
+  const [mapBounds, setMapBounds] = useState(null);
 
-      // 2. สร้าง Icon สีแดง
-      const redIcon = new LeafletModule.Icon({
-        iconUrl:
-          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
-        shadowUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41],
-      });
+  // Function สำหรับจัดการคลิกปุ่มใน Popup (ต้องใช้ window object เพราะอยู่ใน string HTML)
+  useEffect(() => {
+    window.handleDistrictSelect = (dcode) => {
+      if (onSelect) onSelect(dcode);
+    };
+  }, [onSelect]);
 
-      // 3. เก็บ Icons ที่สร้างเสร็จแล้วลง State
-      setLeafletIcons({
-        default: LeafletModule.Icon.Default,
-        red: redIcon,
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const res = await fetch("/api/geo/map-data");
+        const json = await res.json();
+        if (res.ok) setMapData(json);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (selectedDcode && selectedDcode !== "all" && mapData.districts) {
+      const feature = mapData.districts.features.find(
+        (f) => String(f.properties.dcode) === String(selectedDcode)
+      );
+      if (feature) {
+        const layer = L.geoJSON(feature);
+        setMapBounds(layer.getBounds());
+      }
+    } else {
+      setMapBounds(L.latLngBounds([13.45, 100.35], [13.95, 100.95]));
+    }
+  }, [selectedDcode, mapData.districts]);
+
+  const districtStyle = (feature) => {
+    const isSelected =
+      String(feature.properties.dcode) === String(selectedDcode);
+    // สีตาม Cluster: 0=เขียว, 1=เหลือง, 2=แดง (ถ้าไม่มีค่าให้เป็นเทา)
+    const clusterColor =
+      feature.properties.cluster === 2
+        ? "#ef4444"
+        : feature.properties.cluster === 1
+        ? "#eab308"
+        : feature.properties.cluster === 0
+        ? "#10b981"
+        : "#cbd5e1";
+
+    return {
+      fillColor: isSelected ? "#3b82f6" : clusterColor,
+      weight: isSelected ? 3 : 1,
+      opacity: 1,
+      color: "white",
+      fillOpacity: isSelected ? 0.6 : 0.5,
+    };
+  };
+
+  const onEachDistrict = (feature, layer) => {
+    const { dname, dcode, cluster, riskLevel, flood_count } =
+      feature.properties;
+
+    // HTML สำหรับ Popup (จัดสไตล์ด้วย Tailwind class พื้นฐาน หรือ inline style)
+    const popupContent = `
+      <div style="min-width: 200px; text-align: center;">
+        <h3 style="font-weight:bold; font-size:1.1em; margin-bottom:5px;">${dname}</h3>
+        <div style="margin-bottom: 10px; font-size: 0.9em; color: #555;">
+          <span style="background:#f3f4f6; padding: 2px 6px; border-radius:4px;">Cluster ${cluster}</span>
+          <span style="margin-left:5px;">เสี่ยง: ${riskLevel}</span>
+        </div>
+        <p style="font-size:0.8em; margin-bottom:10px;">ประวัติน้ำท่วม: ${flood_count} ครั้ง</p>
+        <button 
+          onclick="window.handleDistrictSelect('${dcode}')"
+          style="background-color: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9em; width: 100%;">
+          ดูรายละเอียด
+        </button>
+      </div>
+    `;
+    layer.bindPopup(popupContent);
+
+    // Hover Effect
+    layer.on("mouseover", (e) => {
+      e.target.setStyle({ fillOpacity: 0.8, weight: 2 });
+    });
+    layer.on("mouseout", (e) => {
+      const isSelected = String(dcode) === String(selectedDcode);
+      e.target.setStyle({
+        fillOpacity: isSelected ? 0.6 : 0.5,
+        weight: isSelected ? 3 : 1,
       });
     });
-  }, []);
-
-  // โหลดขอบเขตเขต (Polygons)
-  useEffect(() => {
-    fetch("/api/geo/districts")
-      .then((res) => res.json())
-      .then((data) => setDistrictGeoJson(data))
-      .catch((err) => console.error("Failed to load district geometry:", err));
-  }, []);
-
-  // โหลดจุดเสี่ยง (Points)
-  useEffect(() => {
-    fetch("/api/geo/floodpoints")
-      .then((res) => res.json())
-      .then((data) => setFloodPointsGeoJson(data))
-      .catch((err) => console.error("Failed to load flood points:", err));
-  }, []);
-
-  // โหลดประตูน้ำ (Points)
-  useEffect(() => {
-    fetch("/api/geo/floodgates")
-      .then((res) => res.json())
-      .then((data) => setFloodgatesGeoJson(data))
-      .catch((err) => console.error("Failed to load floodgates:", err));
-  }, []);
-
-  // ฟังก์ชันสำหรับกรองข้อมูล
-  const filterByDcode = (geojson, dcode) => {
-    if (dcode === "all" || !geojson) return geojson;
-
-    const filteredFeatures = geojson.features.filter(
-      (feature) => feature.properties.dcode == dcode
-    );
-    return { type: "FeatureCollection", features: filteredFeatures };
   };
 
-  // ใช้ useMemo เพื่อคำนวณข้อมูลที่จะแสดงผลใหม่
-  const filteredDistricts = useMemo(
-    () => filterByDcode(districtGeoJson, selectedDcode),
-    [districtGeoJson, selectedDcode]
-  );
-  const filteredFloodPoints = useMemo(
-    () => filterByDcode(floodPointsGeoJson, selectedDcode),
-    [floodPointsGeoJson, selectedDcode]
-  );
-  const filteredFloodgates = useMemo(
-    () => filterByDcode(floodgatesGeoJson, selectedDcode),
-    [floodgatesGeoJson, selectedDcode]
-  );
-
-  // สไตล์สำหรับ Polygon
-  const districtStyle = {
-    color: "#3388ff",
-    weight: 2,
-    opacity: 0.7,
-    fillOpacity: 0.1,
-  };
-
-  // ถ้า Leaflet หรือ Icons ยังไม่พร้อม ให้แสดง Loading
-  if (!L || !leafletIcons) {
+  if (loading)
     return (
-      <div
-        style={{ height: "500px", width: "100%", zIndex: 10 }}
-        className="flex items-center justify-center bg-gray-100 text-gray-500"
-      >
-        กำลังเตรียมแผนที่...
+      <div className="h-full flex items-center justify-center text-slate-400">
+        กำลังโหลดแผนที่...
       </div>
     );
-  }
 
-  // ขอบเขตกรุงเทพ
-  const bangkokBounds = L.latLngBounds([13.45, 100.35], [13.95, 100.95]);
-
-  // ถ้าพร้อมแล้ว ค่อย Render MapContainer
   return (
     <MapContainer
-      center={[13.736717, 100.523186]}
-      zoom={11}
-      style={{ height: "500px", width: "100%", zIndex: 10 }}
-      maxBounds={bangkokBounds}
-      minZoom={10}
+      center={[13.7563, 100.5018]}
+      zoom={10}
+      style={{ height: "100%", width: "100%", borderRadius: "1rem" }}
     >
       <TileLayer
+        attribution="&copy; OpenStreetMap"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
 
-      <LayersControl position="topright">
-        {filteredDistricts && (
-          <LayersControlOverlay checked name="ขอบเขตเขต">
-            <GeoJSON
-              key={selectedDcode + "_districts"}
-              data={filteredDistricts}
-              style={districtStyle}
-              onEachFeature={(feature, layer) => {
-                if (feature.properties && feature.properties.dname) {
-                  layer.bindPopup(feature.properties.dname);
-                }
-              }}
-            />
-          </LayersControlOverlay>
-        )}
+      {mapData.districts && (
+        <GeoJSON
+          data={mapData.districts}
+          style={districtStyle}
+          onEachFeature={onEachDistrict}
+        />
+      )}
 
-        {filteredFloodPoints && (
-          <LayersControlOverlay checked name="จุดเสี่ยงน้ำท่วม">
-            <GeoJSON
-              key={selectedDcode + "_floodpoints"}
-              data={filteredFloodPoints}
-              pointToLayer={(feature, latlng) => {
-                return L.marker(latlng, { icon: leafletIcons.red });
-              }}
-              onEachFeature={(feature, layer) => {
-                if (feature.properties && feature.properties.name) {
-                  layer.bindPopup(feature.properties.name);
-                }
-              }}
-            />
-          </LayersControlOverlay>
-        )}
+      {/* แก้ไข Logic การแสดงจุดเสี่ยง: ถ้าเลือก all หรือ null ให้โชว์หมด */}
+      {mapData.riskPoints &&
+        mapData.riskPoints.features.map((point, idx) => {
+          // ถ้ามีการเลือกเขต (ที่ไม่ใช่ all) ให้กรองจุดเฉพาะเขตนั้น
+          if (
+            selectedDcode &&
+            selectedDcode !== "all" &&
+            String(point.properties.dcode) !== String(selectedDcode)
+          ) {
+            return null;
+          }
 
-        {filteredFloodgates && (
-          <LayersControlOverlay name="ประตูน้ำ">
-            <GeoJSON
-              key={selectedDcode + "_floodgates"}
-              data={filteredFloodgates}
-              onEachFeature={(feature, layer) => {
-                if (feature.properties && feature.properties.name) {
-                  layer.bindPopup(feature.properties.name);
-                }
+          const position = [
+            point.geometry.coordinates[1],
+            point.geometry.coordinates[0],
+          ];
+          return (
+            <CircleMarker
+              key={idx}
+              center={position}
+              radius={5}
+              pathOptions={{
+                color: "white",
+                weight: 1,
+                fillColor: "#dc2626",
+                fillOpacity: 0.9,
               }}
-            />
-          </LayersControlOverlay>
-        )}
-      </LayersControl>
+            >
+              <Popup>{point.properties.name}</Popup>
+            </CircleMarker>
+          );
+        })}
+
+      <MapUpdater bounds={mapBounds} />
     </MapContainer>
   );
 }
