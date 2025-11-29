@@ -101,6 +101,28 @@ export function KSelectionChart() {
     </div>
   );
 }
+const getCustomColor = (serie) => {
+  console.log(serie);
+  const id = serie.serieId; // ชื่อกลุ่ม เช่น "Group 0", "High Risk"
+
+  // ✅ กำหนดสีตามใจชอบตรงนี้ (Hex Code)
+  if (id?.includes("1") || id?.includes("High")) return "#ef4444"; // 🔴 สีแดง (Cluster 1 / High Risk)
+  if (id?.includes("2") || id?.includes("Well")) return "#eab308"; // 🟡 สีเหลือง (Cluster 2 / Well Managed)
+  if (id?.includes("0") || id?.includes("Low")) return "#10b981"; // 🟢 สีเขียว (Cluster 0 / Low Risk)
+
+  // สีสำรองสำหรับกลุ่มอื่นๆ (กรณี K=4, 6)
+  // ให้วนสีจากชุดนี้
+  const fallbackColors = [
+    "#3b82f6",
+    "#8b5cf6",
+    "#ec4899",
+    "#f97316",
+    "#14b8a6",
+    "#6366f1",
+  ];
+  const num = parseInt(id?.replace(/\D/g, "")) || 0; // ดึงตัวเลขจากชื่อกลุ่มมาเลือกสี
+  return fallbackColors[num % fallbackColors.length];
+};
 
 // --- 2. Cluster Comparison (กราฟจุด Scatter) ---
 export function ClusterComparison({ dataK3, dataK4, dataK6 }) {
@@ -138,7 +160,7 @@ export function ClusterComparison({ dataK3, dataK4, dataK6 }) {
           xScale={{ type: "linear", min: "auto", max: "auto" }}
           yScale={{ type: "linear", min: "auto", max: "auto" }}
           blendMode="multiply"
-          colors={{ scheme: "category10" }}
+          colors={getCustomColor}
           nodeSize={12}
           axisBottom={{
             tickSize: 5,

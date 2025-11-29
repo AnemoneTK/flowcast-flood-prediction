@@ -138,6 +138,45 @@ export default function ModelPage() {
                   <ClusterProfileTable data={profileData} />
                 )}
               </div>
+              <div className="mt-6 space-y-3">
+                <div className="p-3 bg-green-50 rounded-xl border border-green-100 flex items-start gap-3">
+                  <div className="mt-1 w-2 h-2 bg-green-500 rounded-full shrink-0 shadow-sm shadow-green-300"></div>
+                  <div>
+                    <h4 className="text-sm font-bold text-green-800">
+                      Cluster 0: Low Risk (กลุ่มความเสี่ยงต่ำ)
+                    </h4>
+                    <p className="text-xs text-green-700/80 mt-1">
+                      พื้นที่ที่มีค่าเฉลี่ยทุกด้านอยู่ในเกณฑ์ต่ำ
+                      ทั้งปริมาณฝนและภาระปั๊ม ทำให้มีความเสี่ยงน้อยที่สุด
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-red-50 rounded-xl border border-red-100 flex items-start gap-3">
+                  <div className="mt-1 w-2 h-2 bg-red-500 rounded-full shrink-0 shadow-sm shadow-red-300"></div>
+                  <div>
+                    <h4 className="text-sm font-bold text-red-800">
+                      Cluster 1: High Risk (กลุ่มเสี่ยงสูง)
+                    </h4>
+                    <p className="text-xs text-red-600/80 mt-1">
+                      พื้นที่ที่มีค่า <strong>Rain Load สูงที่สุด</strong>{" "}
+                      (ฝนตกหนักแต่ปั๊มน้ำไม่เพียงพอ) มีความเสี่ยงน้ำท่วมขังสูง
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 bg-yellow-50 rounded-xl border border-yellow-100 flex items-start gap-3">
+                  <div className="mt-1 w-2 h-2 bg-yellow-500 rounded-full shrink-0 shadow-sm shadow-yellow-300"></div>
+                  <div>
+                    <h4 className="text-sm font-bold text-yellow-800">
+                      Cluster 2: Well Managed (กลุ่มเฝ้าระวัง)
+                    </h4>
+                    <p className="text-xs text-yellow-700/80 mt-1">
+                      พื้นที่ที่มีฝนตกและประชากรหนาแน่น แต่มี{" "}
+                      <strong>Pump Density สูง</strong>{" "}
+                      ทำให้สามารถรับมือและระบายน้ำได้ทันท่วงที
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="lg:col-span-6 p-4 bg-white rounded-3xl border border-slate-100 shadow-sm relative min-h-[500px]">

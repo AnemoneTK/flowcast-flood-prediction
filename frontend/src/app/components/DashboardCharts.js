@@ -2,9 +2,9 @@
 import { ResponsiveLine } from "@nivo/line";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveRadar } from "@nivo/radar";
-import { ResponsivePie } from "@nivo/pie";
+import { ResponsivePie } from "@nivo/pie"; // ✅ เพิ่ม Pie Chart
 
-// --- 1. Rainfall Comparison (Fixed Colors & Text Tooltip) ---
+// --- 1. Rainfall Comparison (Line) ---
 export function RainfallComparisonChart({ data }) {
   if (!data || data.length === 0)
     return (
@@ -17,8 +17,7 @@ export function RainfallComparisonChart({ data }) {
     <div style={{ height: 300 }}>
       <ResponsiveLine
         data={data}
-        // ✅ ใช้สีแบบ Array ธรรมดา (เทา, ฟ้า, ส้ม) ไม่ต้องพึ่ง logic ซับซ้อน
-        colors={["#cbd5e1", "#3b82f6", "#f59e0b"]}
+        colors={{ datum: "color" }}
         margin={{ top: 20, right: 110, bottom: 50, left: 60 }}
         xScale={{ type: "point" }}
         yScale={{
@@ -55,26 +54,21 @@ export function RainfallComparisonChart({ data }) {
         pointLabelYOffset={-12}
         useMesh={true}
         enableSlices="x"
-        // ✅ Tooltip แบบข้อความ (Text-based) ตามที่ขอ
         sliceTooltip={({ slice }) => (
-          <div className="bg-white p-4 border rounded-lg shadow-xl text-sm min-w-[160px]">
-            <div className="font-bold text-slate-800 border-b pb-2 mb-2">
+          <div className="bg-white p-3 border rounded shadow-lg text-sm w-40">
+            <strong className="block mb-2 text-slate-700">
               เดือน {slice.points[0].data.x}
-            </div>
+            </strong>
             {slice.points.map((point) => (
-              <div
-                key={point.id}
-                className="flex justify-between items-center py-1"
-              >
-                {/* ใช้ข้อความบอกปีตรงๆ ไม่ต้องเดาสี */}
-                <span className="font-semibold text-slate-600">
-                  {point.serieId === "2023" && "ปี 2023 (อดีต):"}
-                  {point.serieId === "2024" && "ปี 2024 (ล่าสุด):"}
-                  {point.serieId === "2025" && "ปี 2025 (ปัจจุบัน):"}
-                </span>
+              <div key={point.id} className="flex items-center gap-2 mb-1">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: point.serieColor }}
+                ></div>
                 <span className="font-bold" style={{ color: point.serieColor }}>
-                  {point.data.yFormatted} mm
+                  {point.serieId}:
                 </span>
+                <span>{point.data.yFormatted} mm</span>
               </div>
             ))}
           </div>
@@ -98,14 +92,13 @@ export function RainfallComparisonChart({ data }) {
         theme={{
           text: { fontSize: 12, fill: "#64748b" },
           tooltip: { container: { background: "#ffffff", color: "#333333" } },
-          grid: { line: { stroke: "#f1f5f9", strokeWidth: 1 } },
         }}
       />
     </div>
   );
 }
 
-// --- 2. Risk Ranking Chart ---
+// --- 2. Risk Ranking Chart (Bar) ---
 export function RiskRankingChart({ data }) {
   if (!data || !Array.isArray(data) || data.length === 0) {
     return (
@@ -128,7 +121,9 @@ export function RiskRankingChart({ data }) {
         d.pump_number ||
         (d.districts && d.districts.pump_number) ||
         0;
-      const riskVal = d.vulnerability_score || d.rain_load || 0;
+      const rainLoadVal = d.rain_load || 0;
+      // ใช้ structural vulnerability ถ้ามี หรือใช้ rain load ถ้าไม่มี
+      const riskVal = d.vulnerability_score || rainLoadVal;
 
       return {
         district: name,
@@ -188,16 +183,16 @@ export function RiskRankingChart({ data }) {
   );
 }
 
-// --- 3. District Radar Chart ---
+// --- 3. District Radar Chart (L2 Analysis) ---
 export function DistrictRadarChart({ data, avgData }) {
   if (!data || !avgData) return null;
 
+  // ป้องกันค่าเป็น 0 หรือ undefined
   const safeData = {
     pump_number: data.pump_number || 0,
     flood_point_count: data.flood_point_count || data.flood_points || 0,
     rain_load: data.rain_load || 0,
     recommended_pumps: data.recommended_pumps || 0,
-    vulnerability_score: data.vulnerability_score || 0,
     ...data,
   };
 
@@ -212,7 +207,7 @@ export function DistrictRadarChart({ data, avgData }) {
     },
     {
       metric: "ความเสี่ยงโครงสร้าง",
-      Val: Math.min((safeData.vulnerability_score / 100) * 100, 100),
+      Val: Math.min(((safeData.vulnerability_score || 0) / 100) * 100, 100),
     },
     {
       metric: "ภาระน้ำฝน (L3)",
@@ -249,7 +244,7 @@ export function DistrictRadarChart({ data, avgData }) {
   );
 }
 
-// --- 4. Cluster Distribution (Pie Chart) ---
+// --- 4. Cluster Distribution (Pie Chart) --- ✅ ตัวที่ขาดไป
 export function ClusterDistributionChart({ stats }) {
   if (!stats) return null;
 
@@ -272,7 +267,7 @@ export function ClusterDistributionChart({ stats }) {
       value: stats.low || 0,
       color: "#10b981",
     },
-  ].filter((d) => d.value > 0);
+  ].filter((d) => d.value > 0); // ซ่อนอันที่เป็น 0
 
   if (data.length === 0)
     return (
