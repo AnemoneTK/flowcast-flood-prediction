@@ -16,6 +16,8 @@ import {
   Thermometer,
   TrendingUp,
   Umbrella,
+  Zap, // ไอคอนสำหรับ Simulation
+  RefreshCw, // ไอคอน Reset
 } from "lucide-react";
 
 // Charts
@@ -36,9 +38,8 @@ const InteractiveMap = dynamic(() => import("../components/InteractiveMap"), {
   ),
 });
 
-// --- 1. ฟังก์ชันแปลงรหัสสภาพอากาศ (TMD Weather Codes) ---
+// ฟังก์ชัน Helper เดิม (คงไว้)
 const getWeatherCondition = (code) => {
-  // แปลง condition code เป็น string หรือตัวเลขเพื่อเทียบ
   const c = String(code);
   const map = {
     1: "ท้องฟ้าแจ่มใส",
@@ -54,29 +55,27 @@ const getWeatherCondition = (code) => {
     11: "อากาศเย็น",
     12: "อากาศร้อนจัด",
   };
-  return map[c] || "มีเมฆมาก"; // ค่า Default
+  return map[c] || c; // ถ้าเป็น Text อยู่แล้วก็คืนค่าเดิม
 };
-
-// --- 2. ฟังก์ชันประเมินความเสี่ยงจากฝนพยากรณ์ ---
 const getForecastRisk = (rain) => {
   const r = parseFloat(rain || 0);
   if (r >= 90)
     return {
-      label: "เสี่ยงสูงมาก (Critical)",
+      label: "เสี่ยงสูงมาก",
       color: "bg-red-100 text-red-700 border-red-200",
     };
   if (r >= 35)
     return {
-      label: "เสี่ยงสูง (High)",
+      label: "เสี่ยงสูง",
       color: "bg-orange-100 text-orange-700 border-orange-200",
     };
   if (r >= 10)
     return {
-      label: "เฝ้าระวัง (Medium)",
+      label: "เฝ้าระวัง",
       color: "bg-yellow-100 text-yellow-700 border-yellow-200",
     };
   return {
-    label: "ความเสี่ยงต่ำ (Low)",
+    label: "ปกติ",
     color: "bg-green-100 text-green-700 border-green-200",
   };
 };
@@ -89,12 +88,18 @@ export default function DashboardPage() {
     new Date().toISOString().split("T")[0]
   );
 
+  // State สำหรับ Mock Mode
+  const [isSimulation, setIsSimulation] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
         let query = `?date=${filterDate}`;
         if (selectedDcode) query += `&dcode=${selectedDcode}`;
+
+        // ถ้าเปิด Simulation ให้ส่ง param ไปบอก API
+        if (isSimulation) query += `&mock=true`;
 
         const res = await fetch(`/api/dashboard-analytics${query}`);
         const result = await res.json();
@@ -107,10 +112,12 @@ export default function DashboardPage() {
       setLoading(false);
     };
     fetchData();
-  }, [selectedDcode, filterDate]);
+  }, [selectedDcode, filterDate, isSimulation]); // เพิ่ม isSimulation เป็น dependency
 
-  const handleResetDate = () =>
+  const handleResetDate = () => {
     setFilterDate(new Date().toISOString().split("T")[0]);
+    setIsSimulation(false); // ปิด Simulation เมื่อกลับสู่ปัจจุบัน
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800">
@@ -120,35 +127,57 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
               ระบบอัจฉริยะติดตามสถานการณ์น้ำท่วม
+              {/* Badge แจ้งเตือนเมื่ออยู่ในโหมดจำลอง */}
+              {isSimulation && (
+                <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-full border border-purple-200 flex items-center gap-2 animate-pulse">
+                  <Zap size={16} className="fill-purple-700" />{" "}
+                  โหมดจำลองเหตุการณ์ (Simulation)
+                </span>
+              )}
             </h1>
+
             <div className="flex items-center gap-3 mt-2">
-              <span className="text-slate-500 text-lg font-medium flex items-center gap-2">
-                กำลังดูข้อมูลวันที่: {filterDate}
-              </span>
+              {!isSimulation ? (
+                <span className="text-slate-500 text-lg font-medium flex items-center gap-2">
+                  กำลังดูข้อมูลวันที่: {filterDate}
+                </span>
+              ) : null}
             </div>
           </div>
-          <div className="w-full md:w-auto flex flex-col md:flex-row gap-3 items-stretch">
-            {/* {filterDate !== new Date().toISOString().split("T")[0] && (
+
+          <div className="w-full md:w-auto flex flex-col items-end gap-3">
+            <div className="flex flex-col md:flex-row gap-3 items-stretch">
+              {/* ปุ่ม Toggle Simulation */}
               <button
-                onClick={handleResetDate}
-                className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium text-sm shadow-sm"
+                onClick={() => setIsSimulation(!isSimulation)}
+                className={`px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-all ${
+                  isSimulation
+                    ? "bg-purple-600 text-white hover:bg-purple-700 border border-purple-600"
+                    : "bg-white text-purple-600 border border-purple-200 hover:bg-purple-50"
+                }`}
               >
-                กลับสู่ปัจจุบัน
+                {isSimulation ? <RefreshCw size={16} /> : <Zap size={16} />}
+                {isSimulation ? "ปิดการจำลอง" : "จำลองฝนตกหนัก"}
               </button>
-            )} */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Calendar className="h-5 w-5 text-slate-400" />
+
+              {/* Date Picker */}
+              <div className="relative h-full">
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => {
+                    setFilterDate(e.target.value);
+                    setIsSimulation(false);
+                  }}
+                  className="pl-8 pr-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg focus:ring-blue-500 block h-full w-full md:w-48 shadow-sm font-medium cursor-pointer"
+                  disabled={isSimulation} // ปิดเลือกวันเมื่อจำลอง
+                />
               </div>
-              <input
-                type="date"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg focus:ring-blue-500 block w-full md:w-48 shadow-sm font-medium cursor-pointer"
-              />
-            </div>
-            <div className="w-full md:w-72">
-              <DistrictSelector onSelect={setSelectedDcode} />
+
+              {/* District Selector */}
+              <div className="w-full md:w-72">
+                <DistrictSelector onSelect={setSelectedDcode} />
+              </div>
             </div>
           </div>
         </div>
@@ -160,7 +189,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-8 animate-fade-in-up">
-            {/* ================= OVERVIEW MODE ================= */}
+            {/* ================= OVERVIEW ================= */}
             {data.mode === "overview" && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -169,7 +198,7 @@ export default function DashboardPage() {
                     value={`${data.systemHealth.maxRain} มม.`}
                     sub={`ที่เขต: ${data.systemHealth.maxRainDistrict}`}
                     icon={<CloudRain size={24} />}
-                    color="blue"
+                    color={isSimulation ? "red" : "blue"}
                   />
                   <KPICard
                     title="เขตที่มีความเสี่ยง"
@@ -195,6 +224,7 @@ export default function DashboardPage() {
                     color="red"
                   />
                 </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[600px]">
                   <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-1 flex flex-col overflow-hidden">
                     <div className="p-4 pb-2 flex justify-between items-center">
@@ -217,8 +247,12 @@ export default function DashboardPage() {
                         อันดับเขตเสี่ยงสูงสุด
                       </h3>
                       <p className="text-xs text-slate-400 flex items-center gap-1">
-                        <Calendar size={12} /> ข้อมูลประจำวันที่:{" "}
-                        <strong>{data.systemHealth.rainDateLabel}</strong>
+                        <Calendar size={12} /> ข้อมูล:{" "}
+                        <strong>
+                          {isSimulation
+                            ? "จำลองเหตุการณ์ (Simulation)"
+                            : data.systemHealth.rainDateLabel}
+                        </strong>
                       </p>
                     </div>
                     <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 relative">
@@ -251,14 +285,14 @@ export default function DashboardPage() {
                             <div className="text-right">
                               <span
                                 className={`px-2 py-1 text-xs font-bold rounded-lg ${
-                                  d.riskLevel === "High Risk"
+                                  d.riskLevel === "High"
                                     ? "bg-red-100 text-red-700"
                                     : d.riskLevel === "Medium"
                                     ? "bg-yellow-100 text-yellow-700"
                                     : "bg-green-100 text-green-700"
                                 }`}
                               >
-                                {d.riskLevel === "High Risk"
+                                {d.riskLevel === "High"
                                   ? "เสี่ยงสูง"
                                   : d.riskLevel === "Medium"
                                   ? "เฝ้าระวัง"
@@ -283,12 +317,37 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
+                    {data.systemHealth.lastHighRiskDate &&
+                      !data.systemHealth.isHistoricalView &&
+                      !isSimulation && (
+                        <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t border-slate-100 rounded-b-2xl">
+                          <button
+                            onClick={() =>
+                              handleViewHistory(
+                                data.systemHealth.lastHighRiskDate
+                              )
+                            }
+                            className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-sm font-bold hover:bg-blue-50 hover:text-blue-700 transition-all group"
+                          >
+                            <div className="flex items-center gap-2">
+                              <History
+                                size={18}
+                                className="text-slate-400 group-hover:text-blue-500"
+                              />
+                              <span>
+                                ดูวันวิกฤตล่าสุด (
+                                {data.systemHealth.lastHighRiskDate})
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+                      )}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-[450px]">
                     <h3 className="text-xl font-bold text-slate-800 mb-2">
-                      สถิติน้ำท่วมย้อนหลัง (10 อันดับ)
+                      สถิติน้ำท่วมย้อนหลัง
                     </h3>
                     <div className="h-[320px]">
                       <ResponsiveBar
@@ -329,10 +388,9 @@ export default function DashboardPage() {
               </>
             )}
 
-            {/* ================= DETAIL MODE (รายเขต) ================= */}
+            {/* ================= DETAIL MODE ================= */}
             {data.mode === "detail" && (
               <div className="space-y-6">
-                {/* Back Button */}
                 <button
                   onClick={() => setSelectedDcode(null)}
                   className="inline-flex items-center gap-2 text-slate-500 hover:text-blue-600 hover:bg-white px-4 py-2 rounded-lg transition-all font-medium bg-slate-100 border border-slate-200"
@@ -340,10 +398,10 @@ export default function DashboardPage() {
                   <ArrowLeft size={18} /> กลับไปหน้าภาพรวม
                 </button>
 
-                {/* 1. Header: Status */}
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                   <div
                     className={`lg:col-span-2 p-8 rounded-3xl shadow-lg flex flex-col justify-center relative overflow-hidden text-white ${
+                      data.district.riskLevel === "High" ||
                       data.district.riskLevel === "High Risk"
                         ? "bg-gradient-to-br from-red-500 to-red-600"
                         : data.district.riskLevel === "Medium"
@@ -360,21 +418,21 @@ export default function DashboardPage() {
                       </div>
                       <h2 className="text-4xl font-extrabold mb-4 tracking-tight">
                         สถานะ:{" "}
-                        {data.district.riskLevel === "High Risk"
+                        {data.district.riskLevel === "High" ||
+                        data.district.riskLevel === "High Risk"
                           ? "เสี่ยงสูง 🚨"
                           : data.district.riskLevel === "Medium"
                           ? "เฝ้าระวัง ⚠️"
                           : "ปกติ ✅"}
                       </h2>
                       <p className="opacity-80 text-sm">
-                        ประเมินความเสี่ยงประจำวันที่ {filterDate}
+                        {isSimulation
+                          ? "ข้อมูลจากการจำลองสถานการณ์ (Simulation)"
+                          : `ข้อมูลประจำวันที่ ${filterDate}`}
                       </p>
                     </div>
-                    <div className="absolute right-0 bottom-0 opacity-10 transform translate-y-10 translate-x-10">
-                      <AlertTriangle size={200} />
-                    </div>
                   </div>
-
+                  {/* ... (Pump & Flood Cards) ... */}
                   <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
                     <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 mb-3">
                       <Droplets size={32} />
@@ -386,15 +444,11 @@ export default function DashboardPage() {
                       <span className="text-4xl font-black text-slate-800">
                         {data.district.pump_number}
                       </span>
-                      <span className="text-sm text-slate-400 ml-1">
-                        เครื่อง
-                      </span>
                     </div>
                     <div className="mt-2 px-3 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-full">
                       พร้อมใช้ {data.district.pump_ready}
                     </div>
                   </div>
-
                   <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
                     <div className="p-3 bg-red-50 rounded-2xl text-red-500 mb-3">
                       <AlertTriangle size={32} />
@@ -406,33 +460,31 @@ export default function DashboardPage() {
                       <span className="text-4xl font-black text-slate-800">
                         {data.district.flood_point_count}
                       </span>
-                      <span className="text-sm text-slate-400 ml-1">จุด</span>
                     </div>
-                    <p className="text-xs text-slate-400 mt-2">
-                      พื้นที่ลุ่มต่ำ/ท่วมซ้ำซาก
-                    </p>
                   </div>
                 </div>
 
-                {/* 2. Forecast Cards (3 Days) */}
+                {/* Forecast Cards */}
                 <div>
                   <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <Umbrella className="text-blue-500" /> พยากรณ์อากาศ &
-                    ความเสี่ยงล่วงหน้า (3 วัน)
+                    <Umbrella className="text-blue-500" />{" "}
+                    {isSimulation
+                      ? "พยากรณ์ (จำลอง)"
+                      : "พยากรณ์อากาศ 3 วันล่วงหน้า"}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {data.forecast && data.forecast.length > 0 ? (
                       data.forecast.map((f, i) => {
-                        const risk = getForecastRisk(f.rain_24h); // คำนวณความเสี่ยง
+                        const risk = getForecastRisk(f.rain_24h);
                         return (
                           <div
                             key={i}
                             className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all relative overflow-hidden"
                           >
                             <div
-                              className={`absolute top-0 left-0 w-1.5 h-full ${risk.color
-                                .split(" ")[0]
-                                .replace("bg-", "bg-")}`}
+                              className={`absolute top-0 left-0 w-1.5 h-full ${
+                                risk.color.split(" ")[0]
+                              }`}
                             ></div>
                             <div className="flex justify-between items-start mb-3">
                               <p className="text-sm font-bold text-slate-500">
@@ -472,13 +524,12 @@ export default function DashboardPage() {
                       })
                     ) : (
                       <div className="col-span-3 bg-slate-50 p-8 rounded-2xl text-center text-slate-400 border border-dashed border-slate-300">
-                        ไม่มีข้อมูลพยากรณ์ในช่วงนี้
+                        ไม่มีข้อมูลพยากรณ์
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* 3. Charts Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
                     <div className="flex justify-between items-center mb-6">
@@ -489,14 +540,10 @@ export default function DashboardPage() {
                     </div>
                     <YearlyComparisonLineChart data={data.rainSeries} />
                   </div>
-
                   <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col">
                     <h3 className="text-lg font-bold text-slate-800 mb-1 text-center">
                       ศักยภาพการรับมือ
                     </h3>
-                    <p className="text-xs text-center text-slate-400 mb-4">
-                      เทียบกับค่าเฉลี่ยของกลุ่ม
-                    </p>
                     <div className="flex-1 min-h-[250px]">
                       <ResponsiveRadar
                         data={data.radarData}
@@ -518,7 +565,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* 4. Map */}
                 <div className="bg-white p-1 rounded-3xl shadow-sm border border-slate-200 overflow-hidden h-[400px] relative z-0">
                   <InteractiveMap
                     selectedDcode={selectedDcode}
@@ -534,7 +580,7 @@ export default function DashboardPage() {
   );
 }
 
-// KPI Card
+// Helper KPI Card (เหมือนเดิม)
 function KPICard({ title, value, sub, icon, color }) {
   const colors = {
     blue: "bg-blue-50 text-blue-600",
