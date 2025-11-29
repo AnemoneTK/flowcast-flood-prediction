@@ -1,41 +1,61 @@
+// src/app/api/geo/map-data/route.js
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export async function GET() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
-
   try {
-    // ดึงข้อมูลจาก View ที่มี GeoJSON และ Cluster แล้ว
-    const { data, error } = await supabase
+    // 1. ดึงข้อมูลเขตจาก View ใหม่
+    const { data: districtsData, error: distError } = await supabase
       .from("view_districts_geojson")
       .select("*");
 
-    if (error) throw error;
+    if (distError) throw distError;
 
-    // แปลง Format ให้ Frontend ใช้ง่าย (GeoJSON FeatureCollection)
-    const features = data.map((d) => ({
-      type: "Feature",
-      properties: {
-        dcode: d.dcode,
-        dname: d.dname,
-        cluster: d.cluster, // 0, 1, 2 (ใช้กำหนดสีบนแผนที่)
-        area: d.area,
-        population: d.population,
-      },
-      geometry: d.geometry, // GeoJSON object
-    }));
+    // 2. ดึงข้อมูลจุดเสี่ยง
+    const { data: pointsData, error: pointError } = await supabase
+      .from("view_floodpoints_geojson")
+      .select("*");
+
+    if (pointError) throw pointError;
+
+    // 3. แปลงเป็น GeoJSON Format
+    const districtFeatures = districtsData
+      .filter((row) => row.geometry) // กรองข้อมูลที่ไม่มีพิกัดออก
+      .map((row) => ({
+        type: "Feature",
+        properties: {
+          dcode: row.dcode,
+          dname: row.dname,
+          cluster: row.cluster, // ✅ ส่งค่า Cluster (0,1,2) ไปให้ Frontend
+          flood_count: row.flood_point_count,
+        },
+        geometry: row.geometry,
+      }));
+
+    const pointFeatures = pointsData
+      .filter((row) => row.geometry)
+      .map((row) => ({
+        type: "Feature",
+        properties: {
+          id: row.id,
+          name: row.location_name,
+          dcode: row.dcode,
+          type: "risk_point",
+        },
+        geometry: row.geometry,
+      }));
 
     return NextResponse.json({
-      type: "FeatureCollection",
-      features: features,
+      districts: { type: "FeatureCollection", features: districtFeatures },
+      riskPoints: { type: "FeatureCollection", features: pointFeatures },
     });
-  } catch (error) {
-    console.error("Map Data Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (err) {
+    console.error("Map API Error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -83,9 +83,10 @@ export default function DashboardPage() {
                 {/* 1.1 KPI Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <KPICard
-                    title="ฝนสะสมวันนี้"
+                    title={`ฝนสะสมสูงสุด `} // เพิ่มวันที่ตรงหัวข้อ
+                    // title={`ฝนสะสมสูงสุด ${data.systemHealth.rainDateLabel}`} // เพิ่มวันที่ตรงหัวข้อ
                     value={`${data.systemHealth.maxRain} mm`}
-                    sub="สูงสุดที่เขตหลักสี่"
+                    sub={`สูงสุดที่: ${data.systemHealth.maxRainDistrict}`} // ดึงชื่อเขตจาก API
                     icon={<CloudRain size={24} />}
                     color="blue"
                   />
@@ -120,22 +121,29 @@ export default function DashboardPage() {
                         <MapIcon className="text-blue-600" /> แผนที่ความเสี่ยง
                         (Risk Map)
                       </h3>
-                      <div className="flex gap-2 text-xs">
+                      <div className="flex gap-3 text-xs">
                         <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 rounded-full bg-red-500"></span>{" "}
-                          เสี่ยงสูง (Cluster 2)
+                          <span className="w-3 h-3 rounded-full bg-[#b23400]"></span>
+                          จุดเสี่ยงน้ำท่วม
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 rounded-full bg-yellow-400"></span>{" "}
-                          เฝ้าระวัง (Cluster 1)
+                          <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                          เสี่ยงสูง (1)
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
+                          เฝ้าระวัง (2)
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                          เสี่ยงต่ำ (0)
                         </span>
                       </div>
                     </div>
                     <div className="flex-1 w-full h-[500px] relative z-0">
                       <InteractiveMap
-                        key="map-overview"
                         selectedDcode={selectedDcode || "all"}
-                        onSelect={setSelectedDcode} // <--- เพิ่มบรรทัดนี้ เพื่อให้กดปุ่มใน Popup แล้วเปลี่ยนหน้าได้
+                        onSelect={setSelectedDcode}
                       />
                     </div>
                   </div>
@@ -268,16 +276,14 @@ export default function DashboardPage() {
                           ปริมาณฝนวันนี้
                         </p>
                         <p className="text-3xl font-bold text-blue-600">
-                          45{" "}
+                          {data.rainAmount} {""}
                           <span className="text-sm font-normal text-slate-400">
                             mm
                           </span>
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">
-                          จุดเสี่ยง (อดีต)
-                        </p>
+                        <p className="text-slate-400 text-sm mb-1">จุดเสี่ยง</p>
                         <p className="text-3xl font-bold text-red-500">
                           {data.district.flood_point_count}
                         </p>
@@ -336,8 +342,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 relative z-0">
                       <InteractiveMap
-                        key={`map-detail-${selectedDcode}`}
                         selectedDcode={selectedDcode}
+                        onSelect={setSelectedDcode}
                       />
                     </div>
                   </div>

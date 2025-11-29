@@ -188,6 +188,7 @@ export function ClusterComparison({ dataK3, dataK4, dataK6 }) {
               </div>
             </div>
           )}
+          // tooltip={false}
           legends={[
             {
               anchor: "bottom-right",

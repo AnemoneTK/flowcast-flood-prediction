@@ -177,7 +177,7 @@ export default function DistrictSelector({ onSelect }) {
             </ul>
           ) : (
             <div className="p-4 text-center text-slate-400 text-sm">
-              ไม่พบข้อมูล "{search}"
+              ไม่พบข้อมูล {`"${search}"`}
             </div>
           )}
         </div>
