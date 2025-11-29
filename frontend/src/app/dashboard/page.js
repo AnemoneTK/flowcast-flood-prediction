@@ -1,453 +1,382 @@
+// src/app/dashboard/page.js
 "use client";
 import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Search,
-  MapPin,
-  BarChart3,
-  CloudRain,
-  AlertTriangle,
-  Zap,
-  X,
-  ArrowLeft,
-} from "lucide-react";
 import Navbar from "../components/Navbar";
-import InteractiveMap from "../components/InteractiveMap";
-import {
-  RainfallComparisonChart,
-  RiskRankingChart,
-  DistrictRadarChart,
-  ClusterDistributionChart,
-} from "../components/DashboardCharts";
 import DistrictSelector from "../components/DistrictSelector";
+// กราฟจาก Nivo
+import { ResponsiveBar } from "@nivo/bar";
+import { ResponsiveRadar } from "@nivo/radar";
+import { ResponsiveChoropleth } from "@nivo/geo"; // ใช้สำหรับทำแผนที่ (ถ้ามี GeoJSON)
+import { ResponsiveLine } from "@nivo/line"; // สำหรับ Time Series
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+// Icons
+import {
+  AlertTriangle,
+  CloudRain,
+  Droplets,
+  Map as MapIcon,
+  ArrowUpRight,
+} from "lucide-react";
 
-export default function Dashboard() {
-  // --- Data State ---
-  const [districtsList, setDistrictsList] = useState([]); // รายชื่อเขตทั้งหมด (สำหรับ Search)
-  const [rainData, setRainData] = useState([]);
-  const [rankingData, setRankingData] = useState([]);
-
-  // --- View State ---
-  const [selectedDistricts, setSelectedDistricts] = useState([]); // เขตที่เลือก (Array)
-  const [compareRainData, setCompareRainData] = useState([]);
-  const [forecastStats, setForecastStats] = useState({
-    high: 0,
-    med: 0,
-    low: 0,
-  });
-  const [historyStats, setHistoryStats] = useState({ high: 0, med: 0, low: 0 });
-  const [bkkAvg, setBkkAvg] = useState({});
+export default function DashboardPage() {
+  const [selectedDcode, setSelectedDcode] = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- Initial Load ---
+  // ดึงข้อมูล
   useEffect(() => {
-    const loadData = async () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        // 1. ดึงข้อมูล Analytics (รวม District Info + L2 Score)
-        const analyticsRes = await fetch("/api/analytics");
-        const analytics = await analyticsRes.json();
-
-        setDistrictsList(analytics.allDistricts); // เก็บ Master Data
-        setRankingData(analytics.ranking);
-        setHistoryStats(analytics.historyStats);
-
-        // คำนวณ BKK Avg จากข้อมูลจริง
-        const dList = analytics.allDistricts;
-        if (dList.length > 0) {
-          setBkkAvg({
-            pump_number:
-              dList.reduce((s, d) => s + d.pump_number, 0) / dList.length,
-            flood_point_count:
-              dList.reduce((s, d) => s + d.flood_point_count, 0) / dList.length,
-            pump_density: 0.5,
-            canal_density: 0.5,
-            rain_load: 50, // Mock scale items
-          });
-        }
-
-        // 2. ดึงกราฟฝนรายปี
-        const rainRes = await fetch("/api/rainfall");
-        setRainData(await rainRes.json());
-
-        // 3. คำนวณ Forecast Stats (L3)
-        const high = dList.filter((d) => d.risk_level === "High Risk").length;
-        const med = dList.filter((d) => d.risk_level === "Well Managed").length;
-        const low = dList.filter((d) => d.risk_level === "Low Risk").length;
-        setForecastStats({ high, med, low });
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+        const query = selectedDcode ? `?dcode=${selectedDcode}` : "";
+        const res = await fetch(`/api/dashboard-analytics${query}`);
+        const result = await res.json();
+        setData(result);
+      } catch (error) {
+        console.error("Error:", error);
       }
+      setLoading(false);
     };
-    loadData();
-  }, []);
-
-  // --- Comparison Data Fetcher ---
-  useEffect(() => {
-    if (selectedDistricts.length > 0) {
-      // ดึงกราฟฝนเฉพาะเขตที่เลือก
-      const dcodes = selectedDistricts.map((d) => d.dcode).join(",");
-      fetch(`/api/rainfall/compare?dcodes=${dcodes}`)
-        .then((res) => res.json())
-        .then(setCompareRainData);
-    }
-  }, [selectedDistricts]);
-
-  // --- Handlers ---
-  const handleSelect = (district) => {
-    if (
-      selectedDistricts.length < 3 &&
-      !selectedDistricts.find((d) => d.dcode === district.dcode)
-    ) {
-      setSelectedDistricts([...selectedDistricts, district]);
-    }
-  };
-
-  const handleRemove = (district) => {
-    setSelectedDistricts(
-      selectedDistricts.filter((d) => d.dcode !== district.dcode)
-    );
-  };
+    fetchData();
+  }, [selectedDcode]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
-      <main className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 space-y-8">
-        {/* 1. Control Panel */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col lg:flex-row justify-between items-center gap-6">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800">
+      <Navbar />
+
+      <main className="container mx-auto px-6 py-8 max-w-7xl">
+        {/* --- Header & Search --- */}
+        <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">
-              <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-200">
-                <MapPin size={24} />
-              </div>
-              FlowCast Monitor
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              Flood Monitoring Intelligence
             </h1>
-            <p className="text-slate-500 mt-1 ml-1">
-              ระบบสนับสนุนการตัดสินใจและพยากรณ์น้ำท่วม (L4 DSS)
+            <p className="text-slate-500 mt-2 text-lg">
+              {selectedDcode
+                ? `กำลังวิเคราะห์ข้อมูลเชิงลึก: ${
+                    data?.district?.dname || "..."
+                  }`
+                : "ภาพรวมสถานการณ์น้ำท่วมกรุงเทพมหานคร"}
             </p>
           </div>
-
-          <div className="w-full lg:w-1/2">
-            <DistrictSelector
-              districts={districtsList}
-              selected={selectedDistricts}
-              onSelect={handleSelect}
-              onRemove={handleRemove}
-            />
+          <div className="w-full md:w-96">
+            <DistrictSelector onSelect={setSelectedDcode} />
           </div>
         </div>
 
-        {/* 2. Display Logic Switcher */}
-        <AnimatePresence mode="wait">
-          {/* CASE A: NO SELECTION -> SHOW OVERVIEW (ภาพรวม) */}
-          {selectedDistricts.length === 0 && (
-            <motion.div
-              key="overview"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-8"
-            >
-              {/* Stats Row */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <StatCard
-                  title="เขตเสี่ยงสูง (Forecast)"
-                  value={forecastStats.high}
-                  icon={<Zap />}
-                  color="red"
-                  label="3 วันล่วงหน้า"
-                />
-                <StatCard
-                  title="เขตเปราะบาง (Structural)"
-                  value={historyStats.high}
-                  icon={<AlertTriangle />}
-                  color="orange"
-                  label="จุดเสี่ยงเยอะ"
-                />
-                <StatCard
-                  title="พื้นที่ปลอดภัย"
-                  value={forecastStats.low}
-                  icon={<CloudRain />}
-                  color="green"
-                  label="ปกติ"
-                />
-                <StatCard
-                  title="ปริมาณฝนเฉลี่ย"
-                  value="0.0"
-                  icon={<BarChart3 />}
-                  color="blue"
-                  label="มม./วัน (วันนี้)"
-                />
-              </div>
-
-              {/* Charts Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                  <h3 className="text-lg font-bold text-slate-700 mb-6 flex items-center gap-2">
-                    <CloudRain className="text-blue-500" />{" "}
-                    ปริมาณฝนเฉลี่ยรายเดือน (2023-2024)
-                  </h3>
-                  {loading ? (
-                    <div className="h-[300px] animate-pulse bg-slate-100 rounded-xl" />
-                  ) : (
-                    <RainfallComparisonChart data={rainData} />
-                  )}
-                </div>
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                  <h3 className="text-lg font-bold text-slate-700 mb-6 flex items-center gap-2">
-                    <AlertTriangle className="text-red-500" /> 10
-                    อันดับเขตเปราะบาง (Structural Risk)
-                  </h3>
-                  {loading ? (
-                    <div className="h-[300px] animate-pulse bg-slate-100 rounded-xl" />
-                  ) : (
-                    <RiskRankingChart data={rankingData} />
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* CASE B: SINGLE DISTRICT -> SHOW INSIGHT (เจาะลึก) */}
-          {selectedDistricts.length === 1 && (
-            <motion.div
-              key="single"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
-            >
-              {/* Left: Info Card */}
-              <div className="lg:col-span-4 space-y-6">
-                <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100 text-center relative overflow-hidden">
-                  <div
-                    className={`absolute top-0 left-0 w-full h-2 ${
-                      selectedDistricts[0].risk_level === "High Risk"
-                        ? "bg-red-500"
-                        : "bg-green-500"
-                    }`}
+        {loading ? (
+          <div className="h-96 flex items-center justify-center text-blue-500 animate-pulse text-lg">
+            กำลังประมวลผลข้อมูล...
+          </div>
+        ) : (
+          <div className="space-y-8 animate-fade-in-up">
+            {/* =========================================================
+                SECTION 1: OVERVIEW & MAP (แสดงเมื่อยังไม่เลือกเขต) 
+               ========================================================= */}
+            {data.mode === "overview" && (
+              <>
+                {/* 1.1 KPI Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <KPICard
+                    title="ฝนสะสมวันนี้"
+                    value={`${data.systemHealth.maxRain} mm`}
+                    sub="สูงสุดที่เขตหลักสี่"
+                    icon={<CloudRain size={24} />}
+                    color="blue"
                   />
-                  <h2 className="text-3xl font-extrabold text-slate-800">
-                    {selectedDistricts[0].dname}
-                  </h2>
-                  <p className="text-slate-400 text-sm mt-1">
-                    Code: {selectedDistricts[0].dcode}
-                  </p>
-
-                  <div className="mt-6 flex justify-center">
-                    <span
-                      className={`px-4 py-2 rounded-full text-sm font-bold uppercase flex items-center gap-2 ${
-                        selectedDistricts[0].risk_level === "High Risk"
-                          ? "bg-red-100 text-red-600"
-                          : "bg-green-100 text-green-600"
-                      }`}
-                    >
-                      {selectedDistricts[0].risk_level === "High Risk" ? (
-                        <AlertTriangle size={16} />
-                      ) : (
-                        <CloudRain size={16} />
-                      )}
-                      {selectedDistricts[0].risk_level}
-                    </span>
-                  </div>
-
-                  <div className="mt-8 grid grid-cols-2 gap-4 text-left">
-                    <DetailBox
-                      label="ปั๊มน้ำ"
-                      value={selectedDistricts[0].pump_number}
-                      unit="เครื่อง"
-                    />
-                    <DetailBox
-                      label="จุดเสี่ยง"
-                      value={selectedDistricts[0].flood_point_count}
-                      unit="จุด"
-                      highlight={selectedDistricts[0].flood_point_count > 5}
-                    />
-                    <DetailBox
-                      label="คลอง"
-                      value={selectedDistricts[0].canal_count}
-                      unit="สาย"
-                    />
-                    <DetailBox
-                      label="ประชากร"
-                      value={selectedDistricts[0].population?.toLocaleString()}
-                      unit="คน"
-                    />
-                  </div>
+                  <KPICard
+                    title="ความเสี่ยงภาพรวม"
+                    value="Medium"
+                    sub="เฝ้าระวัง 12 เขต"
+                    icon={<AlertTriangle size={24} />}
+                    color="orange"
+                  />
+                  <KPICard
+                    title="ปั๊มน้ำพร้อมใช้งาน"
+                    value={`${data.systemHealth.activePumps}%`}
+                    sub="จาก 50 เขต"
+                    icon={<Droplets size={24} />}
+                    color="green"
+                  />
+                  <KPICard
+                    title="จุดเสี่ยงทั้งหมด"
+                    value="45 จุด"
+                    sub="ที่เคยท่วมซ้ำซาก"
+                    icon={<MapIcon size={24} />}
+                    color="red"
+                  />
                 </div>
 
-                {/* L4 Action */}
-                <div
-                  className={`p-6 rounded-3xl border shadow-sm ${
-                    selectedDistricts[0].recommended_pumps > 0
-                      ? "bg-red-50 border-red-200"
-                      : "bg-blue-50 border-blue-200"
-                  }`}
-                >
-                  <h4
-                    className={`font-bold mb-2 flex items-center gap-2 ${
-                      selectedDistricts[0].recommended_pumps > 0
-                        ? "text-red-800"
-                        : "text-blue-800"
-                    }`}
-                  >
-                    <Zap size={20} /> AI Recommendation (L4)
-                  </h4>
-                  {selectedDistricts[0].recommended_pumps > 0 ? (
-                    <div>
-                      <p className="text-sm text-red-700 mb-3">
-                        มีความเสี่ยงสูง! แนะนำให้เพิ่มทรัพยากร:
-                      </p>
-                      <div className="bg-white p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                        <span className="text-3xl font-extrabold text-red-600">
-                          +{selectedDistricts[0].recommended_pumps}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[500px]">
+                  {/* 1.2 RISK MAP (ซ้าย ใหญ่หน่อย) */}
+                  <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <MapIcon className="text-blue-600" /> แผนที่ความเสี่ยง
+                        (Risk Map)
+                      </h3>
+                      <div className="flex gap-2 text-xs">
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-full bg-red-500"></span>{" "}
+                          เสี่ยงสูง
                         </span>
-                        <span className="text-sm font-bold text-slate-700">
-                          เครื่องสูบน้ำ
-                          <br />
-                          <span className="font-normal text-slate-400 text-xs">
-                            Mobile Unit
-                          </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-full bg-yellow-400"></span>{" "}
+                          เฝ้าระวัง
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-full bg-green-400"></span>{" "}
+                          ปลอดภัย
                         </span>
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-sm text-blue-700">
-                      สถานการณ์ปกติ โครงสร้างพื้นฐานเพียงพอ
-                    </p>
-                  )}
-                </div>
-              </div>
 
-              {/* Right: Charts */}
-              <div className="lg:col-span-8 space-y-6">
-                {/* Rain History Chart */}
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                  <h3 className="font-bold text-slate-700 mb-4">
-                    ปริมาณฝนรายเขต (เปรียบเทียบปี 2024)
-                  </h3>
-                  <RainfallComparisonChart data={compareRainData} />
-                </div>
-                {/* Radar Chart */}
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 grid md:grid-cols-2 gap-8 items-center">
-                  <div>
-                    <h3 className="font-bold text-slate-700 mb-2">
-                      Structural Analysis (L2)
-                    </h3>
-                    <p className="text-sm text-slate-500 mb-4">
-                      เปรียบเทียบศักยภาพของ {selectedDistricts[0].dname}{" "}
-                      (สีน้ำเงิน) กับค่าเฉลี่ย กทม. (สีเทา) เพื่อหาจุดอ่อน
-                    </p>
-                    <ul className="space-y-2 text-sm text-slate-600">
-                      <li>
-                        • หากกราฟเบ้ไปทาง <strong>จุดเสี่ยง</strong>{" "}
-                        แสดงว่าพื้นที่มีความเปราะบางสูง
-                      </li>
-                      <li>
-                        • หากกราฟเบ้ไปทาง <strong>ปั๊มน้ำ</strong>{" "}
-                        แสดงว่ามีความพร้อมดี
-                      </li>
-                    </ul>
-                  </div>
-                  <DistrictRadarChart
-                    data={selectedDistricts[0]}
-                    avgData={bkkAvg}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
+                    {/* Map Container */}
+                    <div className="flex-1 bg-slate-100 rounded-xl flex items-center justify-center relative overflow-hidden group">
+                      {/* TODO: ใส่ Component Map ของจริงตรงนี้ */}
+                      <div className="text-center">
+                        <p className="text-slate-400 mb-2">
+                          แสดงแผนที่กรุงเทพฯ (Choropleth Map)
+                        </p>
+                        <p className="text-xs text-slate-300">
+                          ใช้ data.mapData เพื่อระบายสีแต่ละเขต
+                        </p>
+                      </div>
 
-          {/* CASE C: COMPARISON MODE (>1) */}
-          {selectedDistricts.length > 1 && (
-            <motion.div
-              key="compare"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-8"
-            >
-              <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100">
-                <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                  <BarChart3 className="text-indigo-500" />
-                  เปรียบเทียบ {selectedDistricts.length} เขต
-                </h3>
-                <RainfallComparisonChart data={compareRainData} />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {selectedDistricts.map((d) => (
-                  <div
-                    key={d.dcode}
-                    className="bg-white p-6 rounded-3xl shadow-md border border-slate-100"
-                  >
-                    <h4 className="font-bold text-lg mb-2">{d.dname}</h4>
-                    <DistrictRadarChart data={d} avgData={bkkAvg} />
-                    <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between text-sm">
-                      <span>
-                        ปั๊ม: <strong>{d.pump_number}</strong>
-                      </span>
-                      <span>
-                        จุดเสี่ยง:{" "}
-                        <strong className="text-red-500">
-                          {d.flood_point_count}
-                        </strong>
-                      </span>
+                      {/* Hover Effect Mockup */}
+                      <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur p-4 rounded-xl shadow-lg text-sm border border-slate-100 hidden group-hover:block">
+                        <p className="font-bold">เขตดอนเมือง</p>
+                        <p className="text-red-500">Risk Score: 85%</p>
+                        <p className="text-xs text-slate-500">
+                          ฝนตกหนักต่อเนื่อง
+                        </p>
+                      </div>
                     </div>
                   </div>
-                ))}
+
+                  {/* 1.3 TOP RISKY RANKING (ขวา) */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-xl font-bold text-slate-800 mb-6">
+                      5 อันดับเขตเสี่ยงสูงสุด
+                    </h3>
+                    <div className="space-y-4">
+                      {data.topRisky.map((d, index) => (
+                        <div
+                          key={d.dcode}
+                          className="group flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-red-50 transition-colors cursor-pointer border border-transparent hover:border-red-100"
+                        >
+                          <div className="flex items-center gap-4">
+                            <span
+                              className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${
+                                index === 0
+                                  ? "bg-red-500 text-white"
+                                  : "bg-white border border-slate-200 text-slate-500"
+                              }`}
+                            >
+                              {index + 1}
+                            </span>
+                            <div>
+                              <p className="font-bold text-slate-700">
+                                {d.dname}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                ปัจจัย: ฝนตกหนัก
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-lg font-extrabold text-red-600">
+                              {d.riskScore}
+                            </span>
+                            <span className="text-xs text-red-400 block">
+                              % ความเสี่ยง
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 1.4 HISTORICAL CHART (ล่างสุด) */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-[400px]">
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">
+                    สถิติน้ำท่วมย้อนหลัง (Historical Flood Frequency)
+                  </h3>
+                  <p className="text-sm text-slate-400 mb-6">
+                    เปรียบเทียบจำนวนครั้งที่เกิดน้ำท่วมในแต่ละเขต (อดีต)
+                  </p>
+                  <ResponsiveBar
+                    data={data.floodGraphData}
+                    keys={["floods"]}
+                    indexBy="dname"
+                    margin={{ top: 10, right: 30, bottom: 50, left: 100 }} // เพิ่ม left margin สำหรับชื่อเขตยาวๆ
+                    padding={0.3}
+                    layout="horizontal" // แนวนอนอ่านง่ายกว่าสำหรับชื่อเขต
+                    colors={["#3B82F6"]}
+                    borderRadius={4}
+                    axisLeft={{
+                      tickSize: 0,
+                      tickPadding: 10,
+                      tickRotation: 0,
+                    }}
+                    axisBottom={{
+                      legend: "จำนวนครั้งที่ท่วม",
+                      legendPosition: "middle",
+                      legendOffset: 40,
+                    }}
+                    enableGridX={true}
+                    enableGridY={false}
+                    theme={{
+                      axis: {
+                        ticks: { text: { fontSize: 12, fill: "#64748b" } },
+                      },
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* =========================================================
+                SECTION 2: DEEP DIVE (แสดงเมื่อเลือกเขต)
+               ========================================================= */}
+            {data.mode === "detail" && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* 2.1 STATUS CARD */}
+                <div className="lg:col-span-3 bg-white p-8 rounded-2xl shadow-sm border border-l-8 border-l-blue-500 flex flex-col md:flex-row justify-between items-center gap-6">
+                  <div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <h2 className="text-4xl font-bold text-slate-800">
+                        {data.district.dname}
+                      </h2>
+                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-sm font-medium">
+                        Cluster {data.district.cluster}
+                      </span>
+                    </div>
+                    <p className="text-slate-500 text-lg">
+                      สถานะความเสี่ยงปัจจุบัน:{" "}
+                      <span
+                        className={`font-bold ${
+                          data.district.riskLevel === "High"
+                            ? "text-red-500"
+                            : "text-green-500"
+                        }`}
+                      >
+                        {data.district.riskLevel}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex gap-8 text-center">
+                    <div>
+                      <p className="text-slate-400 text-sm mb-1">
+                        ปริมาณฝนวันนี้
+                      </p>
+                      <p className="text-3xl font-bold text-blue-600">
+                        45{" "}
+                        <span className="text-sm font-normal text-slate-400">
+                          mm
+                        </span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 text-sm mb-1">
+                        จุดเสี่ยง (อดีต)
+                      </p>
+                      <p className="text-3xl font-bold text-red-500">
+                        {data.district.flood_point_count}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2.2 RADAR CHART (Why it happens?) */}
+                <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[450px] flex flex-col">
+                  <h3 className="font-bold text-lg mb-4 text-center">
+                    ศักยภาพโครงสร้างพื้นฐาน
+                  </h3>
+                  <p className="text-xs text-center text-slate-400 mb-4">
+                    เทียบกับค่าเฉลี่ยของกลุ่ม (Cluster)
+                  </p>
+                  <div className="flex-1">
+                    <ResponsiveRadar
+                      data={data.radarData}
+                      keys={["value", "average"]}
+                      indexBy="feature"
+                      maxValue="auto"
+                      margin={{ top: 40, right: 80, bottom: 40, left: 80 }}
+                      curve="linearClosed"
+                      borderWidth={2}
+                      borderColor={{ from: "color" }}
+                      gridLevels={5}
+                      gridShape="circular"
+                      enableDots={true}
+                      dotSize={8}
+                      colors={["#2563EB", "#CBD5E1"]}
+                      fillOpacity={0.2}
+                      blendMode="multiply"
+                      legends={[
+                        {
+                          anchor: "top-left",
+                          direction: "column",
+                          translateX: -50,
+                          translateY: -40,
+                          itemWidth: 80,
+                          itemHeight: 20,
+                          itemTextColor: "#999",
+                          symbolSize: 12,
+                          symbolShape: "circle",
+                        },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                {/* 2.3 RAIN vs FLOOD CHART (Correlation) */}
+                <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[450px] flex flex-col">
+                  <h3 className="font-bold text-lg mb-2">
+                    ความสัมพันธ์: ปริมาณฝน vs วันที่น้ำท่วม
+                  </h3>
+                  <p className="text-sm text-slate-400 mb-6">
+                    กราฟนี้ช่วยบอกว่า "ต้องฝนตกหนักแค่ไหน ถึงจะท่วม?"
+                  </p>
+
+                  {/* Placeholder for Combo Chart */}
+                  <div className="flex-1 border-2 border-dashed border-slate-100 rounded-xl flex items-center justify-center flex-col text-slate-300">
+                    <ArrowUpRight size={48} className="mb-2 opacity-50" />
+                    <p>กราฟผสม (Bar + Scatter) จะแสดงที่นี่</p>
+                    <p className="text-xs mt-1">
+                      ต้องใช้ข้อมูล Rain Logs รายวันย้อนหลังเพื่อ Plot
+                    </p>
+                  </div>
+                </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
 }
 
-// --- Components ---
-function StatCard({ title, value, icon, color, label }) {
-  const styles = {
-    red: "bg-red-50 text-red-600",
-    orange: "bg-orange-50 text-orange-600",
-    green: "bg-emerald-50 text-emerald-600",
+// Components ย่อยเพื่อความสวยงาม
+function KPICard({ title, value, sub, icon, color }) {
+  const colors = {
     blue: "bg-blue-50 text-blue-600",
+    orange: "bg-orange-50 text-orange-600",
+    green: "bg-green-50 text-green-600",
+    red: "bg-red-50 text-red-600",
   };
-  return (
-    <div
-      className={`p-6 rounded-2xl flex items-start justify-between ${styles[color]}`}
-    >
-      <div>
-        <div className="text-sm font-medium opacity-80 mb-1">{title}</div>
-        <div className="text-3xl font-extrabold">{value}</div>
-        <div className="text-xs opacity-70 mt-1">{label}</div>
-      </div>
-      <div className="p-2 bg-white/50 rounded-lg">{icon}</div>
-    </div>
-  );
-}
 
-function DetailBox({ label, value, unit, highlight }) {
   return (
-    <div
-      className={`p-3 rounded-xl border ${
-        highlight
-          ? "bg-orange-50 border-orange-200"
-          : "bg-slate-50 border-slate-200"
-      }`}
-    >
-      <div className="text-xs text-slate-500 mb-1">{label}</div>
-      <div className="font-bold text-slate-800">
-        {value}{" "}
-        <span className="text-xs font-normal text-slate-400">{unit}</span>
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <h3 className="text-3xl font-bold text-slate-800 mt-2">{value}</h3>
+        </div>
+        <div className={`p-3 rounded-xl ${colors[color]}`}>{icon}</div>
       </div>
+      <p className="text-xs text-slate-400 font-medium">{sub}</p>
     </div>
   );
 }
