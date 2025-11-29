@@ -1,8 +1,7 @@
-// src/app/dashboard/page.js
+// frontend/src/app/dashboard/page.js
 "use client";
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import Navbar from "../components/Navbar";
 import DistrictSelector from "../components/DistrictSelector";
 
 // Dynamic import map
@@ -22,9 +21,16 @@ import {
   CloudRain,
   Droplets,
   Map as MapIcon,
-  ArrowUpRight,
-  ArrowLeft, // เพิ่มไอคอนลูกศรซ้าย
+  ArrowLeft,
+  PieChart as PieIcon, // เปลี่ยน icon
+  PieChartIcon,
 } from "lucide-react";
+
+// Import Charts
+import {
+  PumpStatusChart,
+  ClusterDistributionChart, // Import ตัวใหม่
+} from "../components/DashboardCharts";
 
 export default function DashboardPage() {
   const [selectedDcode, setSelectedDcode] = useState(null);
@@ -38,6 +44,12 @@ export default function DashboardPage() {
         const query = selectedDcode ? `?dcode=${selectedDcode}` : "";
         const res = await fetch(`/api/dashboard-analytics${query}`);
         const result = await res.json();
+
+        // --- เสริม: จัดเรียงข้อมูลน้ำท่วมให้ชัวร์ (Top 10) ---
+        if (result.floodGraphData) {
+          result.floodGraphData.sort((a, b) => a.floods - b.floods); // Nivo แนวนอนจะเรียงล่างขึ้นบน (น้อย->มาก)
+        }
+
         setData(result);
       } catch (error) {
         console.error("Error:", error);
@@ -49,8 +61,8 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800">
-      <main className="container mx-auto px-6 py-8 max-w-7xl">
-        {/* --- Header & Search --- */}
+      <main className="max-w-[1600px] mx-auto px-4 md:px-8 py-8">
+        {/* --- Header --- */}
         <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
@@ -75,18 +87,16 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-8 animate-fade-in-up">
-            {/* =========================================================
-                SECTION 1: OVERVIEW & MAP (แสดงเมื่อยังไม่เลือกเขต) 
-               ========================================================= */}
+            {/* ================= OVERVIEW MODE ================= */}
             {data.mode === "overview" && (
               <>
-                {/* 1.1 KPI Cards */}
+                {/* 1. KPI Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {/* ... (คงเดิม) ... */}
                   <KPICard
-                    title={`ฝนสะสมสูงสุด `} // เพิ่มวันที่ตรงหัวข้อ
-                    // title={`ฝนสะสมสูงสุด ${data.systemHealth.rainDateLabel}`} // เพิ่มวันที่ตรงหัวข้อ
+                    title={`ฝนสะสมสูงสุด `}
                     value={`${data.systemHealth.maxRain} mm`}
-                    sub={`สูงสุดที่: ${data.systemHealth.maxRainDistrict}`} // ดึงชื่อเขตจาก API
+                    sub={`สูงสุดที่: ${data.systemHealth.maxRainDistrict}`}
                     icon={<CloudRain size={24} />}
                     color="blue"
                   />
@@ -113,53 +123,47 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[500px]">
-                  {/* 1.2 RISK MAP */}
+                {/* 2. Map & Ranking */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[600px]">
                   <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-1 flex flex-col overflow-hidden">
                     <div className="p-4 pb-2 flex justify-between items-center">
                       <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <MapIcon className="text-blue-600" /> แผนที่ความเสี่ยง
-                        (Risk Map)
                       </h3>
+                      {/* ... Legend ... */}
                       <div className="flex gap-3 text-xs">
                         <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 rounded-full bg-[#b23400]"></span>
-                          จุดเสี่ยงน้ำท่วม
+                          <span className="w-3 h-3 rounded-full bg-red-500"></span>{" "}
+                          เสี่ยงสูง
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                          เสี่ยงสูง (1)
+                          <span className="w-3 h-3 rounded-full bg-yellow-500"></span>{" "}
+                          เฝ้าระวัง
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
-                          เฝ้าระวัง (2)
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                          เสี่ยงต่ำ (0)
+                          <span className="w-3 h-3 rounded-full bg-green-500"></span>{" "}
+                          ปกติ
                         </span>
                       </div>
                     </div>
-                    <div className="flex-1 w-full h-[500px] relative z-0">
+                    <div className="flex-1 w-full relative z-0 min-h-[500px]">
                       <InteractiveMap
-                        selectedDcode={selectedDcode || "all"}
+                        selectedDcode="all"
                         onSelect={setSelectedDcode}
                       />
                     </div>
                   </div>
 
-                  {/* 1.3 TOP RISKY RANKING */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
                     <h3 className="text-xl font-bold text-slate-800 mb-6">
                       5 อันดับเขตเสี่ยงสูงสุด
                     </h3>
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar">
                       {data.topRisky.map((d, index) => (
                         <div
                           key={d.dcode}
                           onClick={() => setSelectedDcode(d.dcode)}
                           className="group flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-red-50 transition-colors cursor-pointer border border-transparent hover:border-red-100"
-                          title="คลิกเพื่อดูรายละเอียดเขตนี้"
                         >
                           <div className="flex items-center gap-4">
                             <span
@@ -176,16 +180,13 @@ export default function DashboardPage() {
                                 {d.dname}
                               </p>
                               <p className="text-xs text-slate-400">
-                                ปัจจัย: ฝนตกหนัก
+                                ความเสี่ยง: {d.riskLevel}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
                             <span className="text-lg font-extrabold text-red-600">
                               {d.riskScore}
-                            </span>
-                            <span className="text-xs text-red-400 block">
-                              % ความเสี่ยง
                             </span>
                           </div>
                         </div>
@@ -194,70 +195,104 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* 1.4 HISTORICAL CHART */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-[400px]">
-                  <h3 className="text-xl font-bold text-slate-800 mb-2">
-                    สถิติน้ำท่วมย้อนหลัง (Historical Flood Frequency)
-                  </h3>
-                  <p className="text-sm text-slate-400 mb-6">
-                    เปรียบเทียบจำนวนครั้งที่เกิดน้ำท่วมในแต่ละเขต (อดีต)
-                  </p>
-                  <ResponsiveBar
-                    data={data.floodGraphData}
-                    keys={["floods"]}
-                    indexBy="dname"
-                    margin={{ top: 10, right: 30, bottom: 50, left: 100 }}
-                    padding={0.3}
-                    layout="horizontal"
-                    colors={["#3B82F6"]}
-                    borderRadius={4}
-                    axisLeft={{ tickSize: 0, tickPadding: 10, tickRotation: 0 }}
-                    axisBottom={{
-                      legend: "จำนวนครั้งที่ท่วม",
-                      legendPosition: "middle",
-                      legendOffset: 40,
-                    }}
-                    enableGridX={true}
-                    enableGridY={false}
-                    theme={{
-                      axis: {
-                        ticks: { text: { fontSize: 12, fill: "#64748b" } },
-                      },
-                    }}
-                  />
+                {/* 3. Statistics (Flood History & Pump Health) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* กราฟ 1: น้ำท่วมย้อนหลัง (Sorted Top 10) */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-[450px]">
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">
+                      สถิติน้ำท่วมย้อนหลัง (Top 10)
+                    </h3>
+                    <p className="text-sm text-slate-400 mb-6">
+                      เขตที่เกิดปัญหาน้ำท่วมบ่อยครั้งที่สุด
+                    </p>
+                    <div className="h-[320px]">
+                      <ResponsiveBar
+                        data={data.floodGraphData}
+                        keys={["floods"]}
+                        indexBy="dname"
+                        margin={{ top: 10, right: 30, bottom: 50, left: 100 }}
+                        padding={0.3}
+                        layout="horizontal"
+                        colors={["#3B82F6"]}
+                        borderRadius={4}
+                        axisLeft={{ tickSize: 0, tickPadding: 10 }}
+                        axisBottom={{
+                          legend: "จำนวนครั้งที่ท่วม",
+                          legendPosition: "middle",
+                          legendOffset: 40,
+                        }}
+                        enableGridX={true}
+                        theme={{
+                          axis: {
+                            ticks: { text: { fontSize: 12, fill: "#64748b" } },
+                          },
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* กราฟ 2: Pump Status (Sorted by Broken Ratio) */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-[450px]">
+                    <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                      <AlertTriangle size={20} className="text-red-500" />
+                      10 อันดับเขต ปั๊มชำรุดสูงสุด
+                    </h3>
+                    <p className="text-sm text-slate-400 mb-6">
+                      เรียงตามสัดส่วนเครื่องสูบที่ <u>ใช้งานไม่ได้</u>{" "}
+                      ต่อจำนวนติดตั้งทั้งหมด
+                    </p>
+                    <div className="h-[320px]">
+                      {/* ส่งข้อมูลดิบทั้งหมดไป เดี๋ยวใน Component จะ Sort เอง */}
+                      <PumpStatusChart data={data.mapData} />
+                    </div>
+                  </div>
                 </div>
+
+                {/* 4. Overview Summary (Pie Chart) - แทน Risk Matrix */}
+                {/* <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 min-h-[400px]">
+                  <div className="flex justify-between items-center mb-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <PieChartIcon className="text-purple-600" />{" "}
+                        สัดส่วนความเสี่ยงทั่ว กทม.
+                      </h3>
+                      <p className="text-sm text-slate-400 mt-1">
+                        ภาพรวมการกระจายตัวของระดับความเสี่ยงทั้ง 50 เขต
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="h-[350px]">
+                    <ClusterDistributionChart data={data.mapData} />
+                  </div>
+                </div> */}
               </>
             )}
 
-            {/* =========================================================
-                SECTION 2: DEEP DIVE (แสดงเมื่อเลือกเขต)
-               ========================================================= */}
+            {/* ================= DETAIL MODE ================= */}
             {data.mode === "detail" && (
-              <div className="space-y-6">
-                {/* --- ปุ่มย้อนกลับ (ย้ายมาอยู่นอก Card เพื่อแก้ปัญหาซ้อนทับ) --- */}
+              <div className="space-y-8">
+                {/* ... (ส่วน Detail Mode เหมือนเดิม) ... */}
                 <div>
                   <button
                     onClick={() => setSelectedDcode(null)}
-                    className="inline-flex items-center gap-2 text-slate-500 hover:text-blue-600 hover:bg-white px-4 py-2 rounded-full transition-all font-medium shadow-sm"
+                    className="inline-flex items-center gap-2 text-slate-500 hover:text-blue-600 hover:bg-white px-5 py-2.5 rounded-full transition-all font-medium shadow-sm bg-slate-100"
                   >
-                    <ArrowLeft size={20} /> กลับไปดูภาพรวม (Back to Overview)
+                    <ArrowLeft size={20} /> กลับไปดูภาพรวม
                   </button>
                 </div>
-
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  {/* 2.1 STATUS CARD */}
                   <div className="lg:col-span-3 bg-white p-8 rounded-2xl shadow-sm border border-l-8 border-l-blue-500 flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
+                    {/* ... ข้อมูลเขต ... */}
                     <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <h2 className="text-4xl font-bold text-slate-800">
-                          {data.district.dname}
-                        </h2>
-                        <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-sm font-medium">
-                          Cluster {data.district.cluster}
-                        </span>
-                      </div>
-                      <p className="text-slate-500 text-lg">
-                        สถานะความเสี่ยงปัจจุบัน:{" "}
+                      <h2 className="text-4xl font-bold text-slate-800">
+                        {data.district.dname}
+                      </h2>
+                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-sm font-medium">
+                        Cluster {data.district.cluster}
+                      </span>
+                      <p className="text-slate-500 text-lg mt-2">
+                        สถานะ:{" "}
                         <span
                           className={`font-bold ${
                             data.district.riskLevel === "High"
@@ -269,36 +304,29 @@ export default function DashboardPage() {
                         </span>
                       </p>
                     </div>
-
-                    <div className="flex gap-8 text-center md:mr-8">
+                    <div className="flex gap-12 text-center md:mr-8">
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">
-                          ปริมาณฝนวันนี้
-                        </p>
-                        <p className="text-3xl font-bold text-blue-600">
-                          {data.rainAmount} {""}
-                          <span className="text-sm font-normal text-slate-400">
+                        <p className="text-slate-400 text-sm">ปริมาณฝน</p>
+                        <p className="text-4xl font-bold text-blue-600">
+                          {data.rainAmount}{" "}
+                          <span className="text-lg font-normal text-slate-400">
                             mm
                           </span>
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">จุดเสี่ยง</p>
-                        <p className="text-3xl font-bold text-red-500">
+                        <p className="text-slate-400 text-sm">จุดเสี่ยง</p>
+                        <p className="text-4xl font-bold text-red-500">
                           {data.district.flood_point_count}
                         </p>
                       </div>
                     </div>
                   </div>
-
-                  {/* 2.2 RADAR CHART */}
-                  <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[450px] flex flex-col">
-                    <h3 className="font-bold text-lg mb-4 text-center">
+                  {/* Radar Chart & Map */}
+                  <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[500px] flex flex-col">
+                    <h3 className="font-bold text-lg mb-2 text-center">
                       ศักยภาพโครงสร้างพื้นฐาน
                     </h3>
-                    <p className="text-xs text-center text-slate-400 mb-4">
-                      เทียบกับค่าเฉลี่ยของกลุ่ม (Cluster)
-                    </p>
                     <div className="flex-1">
                       <ResponsiveRadar
                         data={data.radarData}
@@ -316,26 +344,11 @@ export default function DashboardPage() {
                         colors={["#2563EB", "#CBD5E1"]}
                         fillOpacity={0.2}
                         blendMode="multiply"
-                        legends={[
-                          {
-                            anchor: "top-left",
-                            direction: "column",
-                            translateX: -50,
-                            translateY: -40,
-                            itemWidth: 80,
-                            itemHeight: 20,
-                            itemTextColor: "#999",
-                            symbolSize: 12,
-                            symbolShape: "circle",
-                          },
-                        ]}
                       />
                     </div>
                   </div>
-
-                  {/* 2.3 Map & Info */}
-                  <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-1 flex flex-col overflow-hidden h-[450px]">
-                    <div className="p-4 pb-2 flex justify-between">
+                  <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-1 flex flex-col overflow-hidden h-[500px]">
+                    <div className="p-4 pb-2">
                       <h3 className="font-bold text-lg">
                         พื้นที่เขต: {data.district.dname}
                       </h3>
@@ -357,6 +370,7 @@ export default function DashboardPage() {
   );
 }
 
+// Helper KPI Card
 function KPICard({ title, value, sub, icon, color }) {
   const colors = {
     blue: "bg-blue-50 text-blue-600",
@@ -364,7 +378,6 @@ function KPICard({ title, value, sub, icon, color }) {
     green: "bg-green-50 text-green-600",
     red: "bg-red-50 text-red-600",
   };
-
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-4">

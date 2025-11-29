@@ -2,7 +2,8 @@
 import { ResponsiveLine } from "@nivo/line";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveRadar } from "@nivo/radar";
-import { ResponsivePie } from "@nivo/pie"; // ✅ เพิ่ม Pie Chart
+import { ResponsivePie } from "@nivo/pie";
+import { ResponsiveScatterPlot } from "@nivo/scatterplot";
 
 // --- 1. Rainfall Comparison (Line) ---
 export function RainfallComparisonChart({ data }) {
@@ -245,60 +246,216 @@ export function DistrictRadarChart({ data, avgData }) {
 }
 
 // --- 4. Cluster Distribution (Pie Chart) --- ✅ ตัวที่ขาดไป
-export function ClusterDistributionChart({ stats }) {
-  if (!stats) return null;
+export function ClusterDistributionChart({ data }) {
+  if (!data) return null;
 
-  const data = [
+  // คำนวณจำนวนเขตในแต่ละระดับความเสี่ยง
+  const stats = data.reduce(
+    (acc, curr) => {
+      if (curr.riskLevel === "High") acc.high++;
+      else if (curr.riskLevel === "Medium") acc.med++;
+      else acc.low++;
+      return acc;
+    },
+    { high: 0, med: 0, low: 0 }
+  );
+
+  const chartData = [
     {
       id: "High Risk",
-      label: "เสี่ยงสูง",
-      value: stats.high || 0,
+      label: "เสี่ยงสูง (High)",
+      value: stats.high,
       color: "#ef4444",
     },
     {
-      id: "Well Managed",
-      label: "เฝ้าระวัง",
-      value: stats.med || 0,
+      id: "Medium",
+      label: "เฝ้าระวัง (Med)",
+      value: stats.med,
       color: "#eab308",
     },
     {
       id: "Low Risk",
-      label: "ปลอดภัย",
-      value: stats.low || 0,
-      color: "#10b981",
+      label: "เสี่ยงต่ำ (Low)",
+      value: stats.low,
+      color: "#22c55e",
     },
-  ].filter((d) => d.value > 0); // ซ่อนอันที่เป็น 0
-
-  if (data.length === 0)
-    return (
-      <div className="flex items-center justify-center h-full text-slate-400 text-xs">
-        No Data
-      </div>
-    );
+  ].filter((d) => d.value > 0);
 
   return (
-    <div style={{ height: 150 }}>
+    <div style={{ height: 350 }}>
       <ResponsivePie
-        data={data}
-        margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        innerRadius={0.6}
+        data={chartData}
+        margin={{ top: 40, right: 80, bottom: 80, left: 80 }}
+        innerRadius={0.5}
         padAngle={0.7}
         cornerRadius={3}
         activeOuterRadiusOffset={8}
         colors={{ datum: "data.color" }}
         borderWidth={1}
         borderColor={{ from: "color", modifiers: [["darker", 0.2]] }}
-        enableArcLinkLabels={false}
-        enableArcLabels={false}
-        tooltip={({ datum: { id, value, color } }) => (
-          <div className="p-2 bg-white border rounded shadow-sm text-xs flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: color }}
-            ></div>
-            <span>
-              {id}: <strong>{value}</strong>
-            </span>
+        arcLinkLabelsSkipAngle={10}
+        arcLinkLabelsTextColor="#333333"
+        arcLinkLabelsThickness={2}
+        arcLinkLabelsColor={{ from: "color" }}
+        arcLabelsSkipAngle={10}
+        arcLabelsTextColor={{ from: "color", modifiers: [["darker", 2]] }}
+        legends={[
+          {
+            anchor: "bottom",
+            direction: "row",
+            justify: false,
+            translateX: 0,
+            translateY: 56,
+            itemsSpacing: 0,
+            itemWidth: 100,
+            itemHeight: 18,
+            itemTextColor: "#999",
+            itemDirection: "left-to-right",
+            itemOpacity: 1,
+            symbolSize: 18,
+            symbolShape: "circle",
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+// --- 5. Pump Status Chart (ปรับปรุง Logic: เรียงตามอัตราส่วนเสีย) ---
+export function PumpStatusChart({ data }) {
+  if (!data || data.length === 0) return null;
+
+  // 1. คำนวณ Ratio และ Sort
+  const processedData = data
+    .map((d) => {
+      const total = d.pump_number || 0;
+      const ready = d.pump_ready || 0;
+      const broken = total - ready;
+      // กันหารด้วย 0
+      const brokenRatio = total > 0 ? broken / total : 0;
+      return { ...d, broken, brokenRatio };
+    })
+    .sort((a, b) => b.brokenRatio - a.brokenRatio) // เรียงจากเสียเยอะ -> น้อย
+    .slice(0, 10); // เอาแค่ 10 อันดับแรก
+
+  // 2. แปลงเป็น format ของ Nivo
+  const chartData = processedData.map((d) => ({
+    district: d.dname,
+    พร้อมใช้: d.pump_ready,
+    "ชำรุด/ซ่อม": d.broken,
+  }));
+
+  return (
+    <div style={{ height: 350 }}>
+      <ResponsiveBar
+        data={chartData}
+        keys={["ชำรุด/ซ่อม", "พร้อมใช้"]} // เอาตัวที่เสียขึ้นก่อนให้น่าสนใจ
+        indexBy="district"
+        margin={{ top: 20, right: 130, bottom: 50, left: 60 }}
+        padding={0.3}
+        valueScale={{ type: "linear" }}
+        indexScale={{ type: "band", round: true }}
+        colors={({ id }) => (id === "พร้อมใช้" ? "#22c55e" : "#ef4444")}
+        borderColor={{ from: "color", modifiers: [["darker", 1.6]] }}
+        axisBottom={{
+          tickSize: 5,
+          tickPadding: 5,
+          tickRotation: -45,
+          legendPosition: "middle",
+          legendOffset: 40,
+        }}
+        axisLeft={{
+          tickSize: 5,
+          tickPadding: 5,
+          tickRotation: 0,
+          legend: "จำนวนเครื่องสูบ",
+          legendPosition: "middle",
+          legendOffset: -40,
+        }}
+        labelSkipWidth={12}
+        labelSkipHeight={12}
+        legends={[
+          {
+            dataFrom: "keys",
+            anchor: "bottom-right",
+            direction: "column",
+            justify: false,
+            translateX: 120,
+            translateY: 0,
+            itemsSpacing: 2,
+            itemWidth: 100,
+            itemHeight: 20,
+            itemDirection: "left-to-right",
+            itemOpacity: 0.85,
+            symbolSize: 20,
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+export function RiskScatterPlot({ data }) {
+  if (!data) return null;
+
+  // จัดกลุ่มข้อมูลตาม Cluster เพื่อใส่สี
+  const scatterData = [
+    {
+      id: "High Risk",
+      data: data
+        .filter((d) => d.cluster === 1)
+        .map((d) => ({
+          x: d.pump_number,
+          y: d.flood_point_count,
+          name: d.dname,
+        })),
+    },
+    {
+      id: "Well Managed",
+      data: data
+        .filter((d) => d.cluster === 2)
+        .map((d) => ({
+          x: d.pump_number,
+          y: d.flood_point_count,
+          name: d.dname,
+        })),
+    },
+    {
+      id: "Low Risk",
+      data: data
+        .filter((d) => d.cluster === 0)
+        .map((d) => ({
+          x: d.pump_number,
+          y: d.flood_point_count,
+          name: d.dname,
+        })),
+    },
+  ];
+
+  return (
+    <div style={{ height: 400 }}>
+      <ResponsiveScatterPlot
+        data={scatterData}
+        margin={{ top: 20, right: 90, bottom: 70, left: 90 }}
+        xScale={{ type: "linear", min: 0, max: "auto" }}
+        yScale={{ type: "linear", min: 0, max: "auto" }}
+        blendMode="multiply"
+        colors={["#ef4444", "#eab308", "#10b981"]} // แดง เหลือง เขียว
+        axisBottom={{
+          legend: "จำนวนปั๊มน้ำ (Infrastructure)",
+          legendPosition: "middle",
+          legendOffset: 46,
+        }}
+        axisLeft={{
+          legend: "จุดเสี่ยงน้ำท่วม (Risk)",
+          legendPosition: "middle",
+          legendOffset: -60,
+        }}
+        tooltip={({ node }) => (
+          <div className="bg-white p-2 border shadow-sm text-xs">
+            <strong>{node.data.name}</strong>
+            <br />
+            ปั๊ม: {node.data.x} | จุดเสี่ยง: {node.data.y}
           </div>
         )}
       />
