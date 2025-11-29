@@ -16,8 +16,8 @@ import {
   Thermometer,
   TrendingUp,
   Umbrella,
-  Zap, // ไอคอนสำหรับ Simulation
-  RefreshCw, // ไอคอน Reset
+  Zap,
+  RefreshCw,
 } from "lucide-react";
 
 // Charts
@@ -38,7 +38,30 @@ const InteractiveMap = dynamic(() => import("../components/InteractiveMap"), {
   ),
 });
 
-// ฟังก์ชัน Helper เดิม (คงไว้)
+// Helper: ฟังก์ชันช่วยเช็คระดับความเสี่ยง (รองรับหลายรูปแบบคำ)
+const getRiskInfo = (level) => {
+  const l = String(level || "").toLowerCase();
+  if (l.includes("high") || l.includes("critical")) {
+    return {
+      text: "เสี่ยงสูง",
+      colorClass: "bg-red-100 text-red-700",
+      status: "High",
+    };
+  }
+  if (l.includes("medium") || l.includes("watch") || l.includes("managed")) {
+    return {
+      text: "เฝ้าระวัง",
+      colorClass: "bg-yellow-100 text-yellow-700",
+      status: "Medium",
+    };
+  }
+  return {
+    text: "เสี่ยงต่ำ",
+    colorClass: "bg-green-100 text-green-700",
+    status: "Low",
+  };
+};
+
 const getWeatherCondition = (code) => {
   const c = String(code);
   const map = {
@@ -55,8 +78,9 @@ const getWeatherCondition = (code) => {
     11: "อากาศเย็น",
     12: "อากาศร้อนจัด",
   };
-  return map[c] || c; // ถ้าเป็น Text อยู่แล้วก็คืนค่าเดิม
+  return map[c] || c;
 };
+
 const getForecastRisk = (rain) => {
   const r = parseFloat(rain || 0);
   if (r >= 90)
@@ -87,8 +111,6 @@ export default function DashboardPage() {
   const [filterDate, setFilterDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-
-  // State สำหรับ Mock Mode
   const [isSimulation, setIsSimulation] = useState(false);
 
   useEffect(() => {
@@ -97,8 +119,6 @@ export default function DashboardPage() {
       try {
         let query = `?date=${filterDate}`;
         if (selectedDcode) query += `&dcode=${selectedDcode}`;
-
-        // ถ้าเปิด Simulation ให้ส่ง param ไปบอก API
         if (isSimulation) query += `&mock=true`;
 
         const res = await fetch(`/api/dashboard-analytics${query}`);
@@ -112,11 +132,11 @@ export default function DashboardPage() {
       setLoading(false);
     };
     fetchData();
-  }, [selectedDcode, filterDate, isSimulation]); // เพิ่ม isSimulation เป็น dependency
+  }, [selectedDcode, filterDate, isSimulation]);
 
   const handleResetDate = () => {
     setFilterDate(new Date().toISOString().split("T")[0]);
-    setIsSimulation(false); // ปิด Simulation เมื่อกลับสู่ปัจจุบัน
+    setIsSimulation(false);
   };
 
   return (
@@ -127,7 +147,6 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
               ระบบอัจฉริยะติดตามสถานการณ์น้ำท่วม
-              {/* Badge แจ้งเตือนเมื่ออยู่ในโหมดจำลอง */}
               {isSimulation && (
                 <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-full border border-purple-200 flex items-center gap-2 animate-pulse">
                   <Zap size={16} className="fill-purple-700" />{" "}
@@ -135,7 +154,6 @@ export default function DashboardPage() {
                 </span>
               )}
             </h1>
-
             <div className="flex items-center gap-3 mt-2">
               {!isSimulation ? (
                 <span className="text-slate-500 text-lg font-medium flex items-center gap-2">
@@ -147,7 +165,6 @@ export default function DashboardPage() {
 
           <div className="w-full md:w-auto flex flex-col items-end gap-3">
             <div className="flex flex-col md:flex-row gap-3 items-stretch">
-              {/* ปุ่ม Toggle Simulation */}
               <button
                 onClick={() => setIsSimulation(!isSimulation)}
                 className={`px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-all ${
@@ -160,8 +177,10 @@ export default function DashboardPage() {
                 {isSimulation ? "ปิดการจำลอง" : "จำลองฝนตกหนัก"}
               </button>
 
-              {/* Date Picker */}
-              <div className="relative h-full">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Calendar className="h-5 w-5 text-slate-400" />
+                </div>
                 <input
                   type="date"
                   value={filterDate}
@@ -169,12 +188,10 @@ export default function DashboardPage() {
                     setFilterDate(e.target.value);
                     setIsSimulation(false);
                   }}
-                  className="pl-8 pr-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg focus:ring-blue-500 block h-full w-full md:w-48 shadow-sm font-medium cursor-pointer"
-                  disabled={isSimulation} // ปิดเลือกวันเมื่อจำลอง
+                  className="pl-10 pr-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg focus:ring-blue-500 block w-full md:w-48 shadow-sm font-medium cursor-pointer"
+                  disabled={isSimulation}
                 />
               </div>
-
-              {/* District Selector */}
               <div className="w-full md:w-72">
                 <DistrictSelector onSelect={setSelectedDcode} />
               </div>
@@ -225,7 +242,7 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[600px]">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-[500px]">
                   <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-1 flex flex-col overflow-hidden">
                     <div className="p-4 pb-2 flex justify-between items-center">
                       <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -257,50 +274,43 @@ export default function DashboardPage() {
                     </div>
                     <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 relative">
                       {data.topRisky.length > 0 ? (
-                        data.topRisky.map((d, index) => (
-                          <div
-                            key={d.dcode}
-                            onClick={() => setSelectedDcode(d.dcode)}
-                            className="group flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-red-50 transition-all cursor-pointer border border-transparent hover:border-red-100 hover:shadow-md"
-                          >
-                            <div className="flex items-center gap-4">
-                              <span
-                                className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${
-                                  index === 0
-                                    ? "bg-red-600 text-white shadow-lg"
-                                    : "bg-white border border-slate-200 text-slate-500"
-                                }`}
-                              >
-                                {index + 1}
-                              </span>
-                              <div>
-                                <p className="font-bold text-slate-700 group-hover:text-red-700 transition-colors">
-                                  {d.dname}
-                                </p>
-                                <p className="text-xs text-slate-400 group-hover:text-red-400">
-                                  ภาระน้ำฝน: {Math.round(d.rainLoad)}
-                                </p>
+                        data.topRisky.map((d, index) => {
+                          const riskInfo = getRiskInfo(d.riskLevel); // ใช้ฟังก์ชันช่วยเช็ค
+                          return (
+                            <div
+                              key={d.dcode}
+                              onClick={() => setSelectedDcode(d.dcode)}
+                              className="group flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-red-50 transition-all cursor-pointer border border-transparent hover:border-red-100 hover:shadow-md"
+                            >
+                              <div className="flex items-center gap-4">
+                                <span
+                                  className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${
+                                    index === 0
+                                      ? "bg-red-600 text-white shadow-lg"
+                                      : "bg-white border border-slate-200 text-slate-500"
+                                  }`}
+                                >
+                                  {index + 1}
+                                </span>
+                                <div>
+                                  <p className="font-bold text-slate-700 group-hover:text-red-700 transition-colors">
+                                    {d.dname}
+                                  </p>
+                                  <p className="text-xs text-slate-400 group-hover:text-red-400">
+                                    ภาระน้ำฝน: {Math.round(d.rainLoad)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span
+                                  className={`px-2 py-1 text-xs font-bold rounded-lg ${riskInfo.colorClass}`}
+                                >
+                                  {riskInfo.text}
+                                </span>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <span
-                                className={`px-2 py-1 text-xs font-bold rounded-lg ${
-                                  d.riskLevel === "High"
-                                    ? "bg-red-100 text-red-700"
-                                    : d.riskLevel === "Medium"
-                                    ? "bg-yellow-100 text-yellow-700"
-                                    : "bg-green-100 text-green-700"
-                                }`}
-                              >
-                                {d.riskLevel === "High"
-                                  ? "เสี่ยงสูง"
-                                  : d.riskLevel === "Medium"
-                                  ? "เฝ้าระวัง"
-                                  : "เสี่ยงต่ำ"}
-                              </span>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="flex flex-col items-center justify-center h-[96%] text-center space-y-3 bg-green-50/50 rounded-xl border border-green-100/50 m-2">
                           <div className="p-3 bg-green-100 rounded-full text-green-500">
@@ -323,9 +333,7 @@ export default function DashboardPage() {
                         <div className="absolute bottom-0 left-0 w-full p-4 bg-white border-t border-slate-100 rounded-b-2xl">
                           <button
                             onClick={() =>
-                              handleViewHistory(
-                                data.systemHealth.lastHighRiskDate
-                              )
+                              setFilterDate(data.systemHealth.lastHighRiskDate)
                             }
                             className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-sm font-bold hover:bg-blue-50 hover:text-blue-700 transition-all group"
                           >
@@ -400,39 +408,45 @@ export default function DashboardPage() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                   <div
-                    className={`lg:col-span-2 p-8 rounded-3xl shadow-lg flex flex-col justify-center relative overflow-hidden text-white ${
-                      data.district.riskLevel === "High" ||
-                      data.district.riskLevel === "High Risk"
-                        ? "bg-gradient-to-br from-red-500 to-red-600"
-                        : data.district.riskLevel === "Medium"
-                        ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                        : "bg-gradient-to-br from-emerald-400 to-green-600"
+                    className={`lg:col-span-2 p-8 rounded-3xl shadow-lg flex flex-col justify-center relative overflow-hidden text-white transition-colors duration-500 ${
+                      // เลือกสีพื้นหลังตามระดับความเสี่ยง
+                      getRiskInfo(data.district.riskLevel).status === "High"
+                        ? "bg-gradient-to-br from-red-500 to-red-600 shadow-red-200"
+                        : getRiskInfo(data.district.riskLevel).status ===
+                          "Medium"
+                        ? "bg-gradient-to-br from-amber-400 to-orange-500 shadow-orange-200"
+                        : "bg-gradient-to-br from-emerald-400 to-green-600 shadow-green-200"
                     }`}
                   >
+                    {/* เนื้อหา (อยู่ชั้นบน z-10) */}
                     <div className="relative z-10">
                       <div className="flex items-center gap-3 mb-2 opacity-90">
-                        <MapIcon size={20} />{" "}
-                        <span>
+                        <MapIcon size={20} />
+                        <span className="font-medium text-lg">
                           {data.district.dname} (รหัส: {data.district.dcode})
                         </span>
                       </div>
-                      <h2 className="text-4xl font-extrabold mb-4 tracking-tight">
-                        สถานะ:{" "}
-                        {data.district.riskLevel === "High" ||
-                        data.district.riskLevel === "High Risk"
-                          ? "เสี่ยงสูง 🚨"
-                          : data.district.riskLevel === "Medium"
-                          ? "เฝ้าระวัง ⚠️"
-                          : "ปกติ ✅"}
+
+                      <h2 className="text-5xl font-extrabold mb-4 tracking-tight flex items-center gap-3">
+                        {/* แสดงข้อความสถานะ */}
+                        {getRiskInfo(data.district.riskLevel).text}
                       </h2>
-                      <p className="opacity-80 text-sm">
+
+                      <p className="opacity-80 text-sm font-medium bg-white/20 inline-block px-3 py-1 rounded-lg backdrop-blur-sm border border-white/30">
                         {isSimulation
-                          ? "ข้อมูลจากการจำลองสถานการณ์ (Simulation)"
+                          ? "⚡ ข้อมูลจากการจำลองสถานการณ์ (Simulation Mode)"
                           : `ข้อมูลประจำวันที่ ${filterDate}`}
                       </p>
                     </div>
+
+                    {/* ไอคอนตกแต่งพื้นหลัง (อยู่ชั้นล่าง) */}
+                    <div className="absolute -right-6 -bottom-6 opacity-10 transform rotate-12 pointer-events-none">
+                      <AlertTriangle size={240} />
+                    </div>
+
+                    {/* ลวดลายพื้นหลังเพิ่มเติม (Optional) */}
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl transform -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
                   </div>
-                  {/* ... (Pump & Flood Cards) ... */}
                   <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
                     <div className="p-3 bg-blue-50 rounded-2xl text-blue-600 mb-3">
                       <Droplets size={32} />
@@ -580,7 +594,7 @@ export default function DashboardPage() {
   );
 }
 
-// Helper KPI Card (เหมือนเดิม)
+// Helper KPI Card
 function KPICard({ title, value, sub, icon, color }) {
   const colors = {
     blue: "bg-blue-50 text-blue-600",
