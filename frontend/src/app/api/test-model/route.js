@@ -9,7 +9,8 @@ const supabase = createClient(
 
 // ⚠️ URL ของ Backend Python ที่คุณ Deploy แล้ว (เช่น https://flowcast-api.onrender.com)
 // แนะนำให้เก็บใน .env เป็น process.env.PYTHON_API_URL
-const PYTHON_API_URL = process.env.PYTHON_API_URL || "http://localhost:8000";
+const PYTHON_API_URL =
+  process.env.NEXT_PUBLIC_PYTHON_API_URL || "http://localhost:8000";
 
 export async function POST(request) {
   try {
