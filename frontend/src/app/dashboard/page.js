@@ -49,8 +49,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800">
-      <Navbar />
-
       <main className="container mx-auto px-6 py-8 max-w-7xl">
         {/* --- Header & Search --- */}
         <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
