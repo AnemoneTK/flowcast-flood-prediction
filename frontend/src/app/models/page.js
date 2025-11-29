@@ -18,6 +18,7 @@ import {
   Info,
   Lightbulb,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function ModelPage() {
   const [clusterData, setClusterData] = useState({ k3: [], k4: [], k6: [] });
@@ -89,7 +90,9 @@ export default function ModelPage() {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
       <main className="max-w-[1600px] mx-auto px-4 md:px-8 py-10 space-y-24">
         {/* --- HEADER --- */}
-        <section className="text-center space-y-6 py-10 relative">
+        {/* ส่วนหัวของหน้า Models */}
+
+        <section className="text-center space-y-6 pt-10 relative">
           <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight">
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">
               Behind the AI
@@ -103,6 +106,15 @@ export default function ModelPage() {
             100% ด้วย
             <strong> Supervised Learning</strong>
           </p>
+          <div className="flex flex-col md:flex-row justify-center items-center  ">
+            {/* ✅ ปุ่มกดเพื่อไปหน้าทดสอบโมเดล */}
+            <Link href="/test-model">
+              <button className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-1">
+                <Zap className="w-5 h-5" />
+                ทดลองโมเดล (AI Sandbox)
+              </button>
+            </Link>
+          </div>
         </section>
 
         {/* --- PART 1.1: Finding K --- */}
