@@ -358,7 +358,7 @@ export default function DataPage() {
             />
             <DataSourceCard
               title="ปริมาณน้ำฝน"
-              format="API (JSON)"
+              format="Web Scraping"
               source="BMA Rainfall API"
               icon={Activity}
             />
