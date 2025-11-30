@@ -146,7 +146,7 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-              ระบบอัจฉริยะติดตามสถานการณ์น้ำท่วม
+              ระบบติดตามสถานการณ์น้ำท่วม
               {isSimulation && (
                 <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-full border border-purple-200 flex items-center gap-2 animate-pulse">
                   <Zap size={16} className="fill-purple-700" />{" "}
