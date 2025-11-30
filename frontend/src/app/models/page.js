@@ -43,7 +43,7 @@ export default function ModelPage() {
       id: "xgboost",
       name: "XGBoost",
       type: "Gradient Boosting",
-      accuracy: "100%",
+      accuracy: "99.9%",
       icon: Zap,
       color: "from-yellow-400 to-orange-500",
       textColor: "text-yellow-600",
@@ -73,7 +73,7 @@ export default function ModelPage() {
       id: "logistic",
       name: "Logistic Regression",
       type: "Linear Model",
-      accuracy: "98.8%",
+      accuracy: "99.2%",
       icon: BrainCircuit,
       color: "from-emerald-400 to-green-500",
       textColor: "text-emerald-600",
@@ -102,8 +102,7 @@ export default function ModelPage() {
           <p className="text-lg md:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
             เจาะลึกกระบวนการคิดของระบบ FlowCast:
             จากการค้นหาแพทเทิร์นความเสี่ยงด้วย
-            <strong> Unsupervised Learning</strong> สู่การพยากรณ์แม่นยำระดับ
-            100% ด้วย
+            <strong> Unsupervised Learning</strong> สู่การพยากรณ์ด้วย
             <strong> Supervised Learning</strong>
           </p>
           <div className="flex flex-col md:flex-row justify-center items-center  ">
@@ -266,12 +265,11 @@ export default function ModelPage() {
                   <div className="mt-1 w-2 h-2 bg-yellow-500 rounded-full shrink-0 shadow-sm shadow-yellow-300"></div>
                   <div>
                     <h4 className="text-sm font-bold text-yellow-800">
-                      Cluster 2: Well Managed (กลุ่มเฝ้าระวัง)
+                      Cluster 2: Medium Risk (กลุ่มเฝ้าระวัง)
                     </h4>
                     <p className="text-xs text-yellow-700/80 mt-1">
-                      พื้นที่ที่มีฝนตกและประชากรหนาแน่น แต่มี{" "}
-                      <strong>Pump Density สูง</strong>{" "}
-                      ทำให้สามารถรับมือและระบายน้ำได้ทันท่วงที
+                      เปราะบาง พื้นที่เฝ้าระวัง ด้วยประวัติน้ำท่วมสูง{" "}
+                      <strong>(High Flood History) สูง</strong>{" "}
                     </p>
                   </div>
                 </div>

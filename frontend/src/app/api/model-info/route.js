@@ -103,9 +103,9 @@ export async function GET() {
   }
 
   const modelMetrics = [
-    { model: "XGBoost", Accuracy: 1.0, F1: 1.0 },
-    { model: "Random Forest", Accuracy: 0.996, F1: 0.936 },
-    { model: "Logistic Regression", Accuracy: 0.988, F1: 0.898 },
+    { model: "XGBoost", Accuracy: 0.9992, F1: 0.9953 },
+    { model: "Random Forest", Accuracy: 0.9969, F1: 0.9679 },
+    { model: "Logistic Regression", Accuracy: 0.9923, F1: 0.9371 },
   ];
 
   return NextResponse.json({ clusters, modelMetrics, clusterProfile });

@@ -271,8 +271,8 @@ export default function HomePage() {
               badgeColor="bg-red-100 text-red-800"
             />
             <ClusterCard
-              title="Cluster 2: Well Managed"
-              description="พื้นที่เฝ้าระวังพิเศษ ฝนตกหนักแต่มีเครื่องสูบน้ำหนาแน่น (High Capacity)"
+              title="Cluster 2: Medium Risk"
+              description="พื้นที่เฝ้าระวัง ด้วยประวัติน้ำท่วมสูง(High Flood History)"
               badgeColor="bg-yellow-100 text-yellow-800"
             />
           </div>
