@@ -247,7 +247,6 @@ export default function DashboardPage() {
                     <div className="p-4 pb-2 flex justify-between items-center">
                       <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <MapIcon className="text-blue-600" /> แผนที่ความเสี่ยง
-                        AI
                       </h3>
                     </div>
                     <div className="flex-1 w-full relative z-0 min-h-[500px]">
